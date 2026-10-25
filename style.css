@@ -187,6 +187,7 @@ textarea { min-height: 120px; resize: vertical; }
 
 /* Fußzeile wie im Story-Bild: kräftig, schwarz auf Gelb */
 footer { margin-top: 36px; display: grid; gap: 8px; justify-items: center; font-size: .82rem; font-weight: 700; color: var(--ink); text-align: center; }
+.private-note { margin: 0; font-size: .76rem; font-weight: 600; opacity: .75; }
 footer nav { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 16px; max-width: 100%; }
 .demo-banner { background: var(--paper); border-radius: 14px; padding: 8px 12px; font-size: .8rem; font-weight: 500; box-shadow: var(--slab-sm); }
 
