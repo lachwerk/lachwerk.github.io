@@ -7,10 +7,12 @@
   <meta name="robots" content="noindex">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <script>
-    // Kurzlinks wie lachwerk.github.io/tv/AB3CD auf den Bildschirm-Modus der App umleiten
+    // Kurzlinks umleiten: /tv/CODE Bildschirm, /l/CODE Live-Duell am Handy, /g/CODE Gruppe
     (function () {
-      var m = location.pathname.match(/\/tv\/([0-9a-z]{4,8})\/?$/i);
-      if (m) location.replace("/#/tv/" + m[1].toUpperCase());
+      var p = location.pathname, m;
+      if ((m = p.match(/\/tv\/([0-9a-z]{4,8})\/?$/i))) location.replace("/#/tv/" + m[1].toUpperCase());
+      else if ((m = p.match(/\/l\/([0-9a-z]{4,8})\/?$/i))) location.replace("/#/live/" + m[1].toUpperCase());
+      else if ((m = p.match(/\/g\/([0-9a-z]{4,8})\/?$/i))) location.replace("/#/gruppe/" + m[1].toUpperCase());
     })();
   </script>
   <style>

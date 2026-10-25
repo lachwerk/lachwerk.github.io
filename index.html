@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-title" content="Lachwerk">
   <link rel="canonical" href="https://lachwerk.github.io/">
   <link rel="preconnect" href="https://yssqvkhmglwdxvjurxag.supabase.co" crossorigin>
-  <link rel="stylesheet" href="style.css?v=19">
+  <link rel="stylesheet" href="style.css?v=20">
   <!-- Vorschau beim Teilen (WhatsApp, Telegram …) -->
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://lachwerk.github.io/">
@@ -43,7 +43,7 @@
 
     <footer>
       <p class="demo-banner" id="demoBanner" hidden>Demo-Modus: Stimmen und Witze bleiben nur in deinem Browser. Wie du die Seite live schaltest, steht in der README.</p>
-      <nav><a href="witze/">Witze-Sammlung</a><a href="#/bildschirm">Bildschirm</a><a href="plakat.html">Plakat</a><a href="partner.html">Für Unternehmen</a><a href="impressum.html">Impressum</a><a href="datenschutz.html">Datenschutz</a></nav>
+      <nav><a href="witze/">Witze-Sammlung</a><a href="#/gruppen">Gruppen</a><a href="#/bildschirm">Bildschirm</a><a href="plakat.html">Plakat</a><a href="partner.html">Für Unternehmen</a><a href="impressum.html">Impressum</a><a href="datenschutz.html">Datenschutz</a></nav>
     </footer>
   </div>
 
@@ -94,6 +94,7 @@
       <p class="muted small" id="accountInfo"></p>
       <div class="row end">
         <a class="btn ghost" id="accountProfile" href="#/" data-close>Mein Profil</a>
+        <a class="btn ghost" href="#/gruppen" data-close>Meine Gruppen</a>
         <a class="btn ghost" href="#/highlights" data-close>Benachrichtigungen</a>
         <button type="button" class="btn ghost" id="accountPw">Passwort ändern</button>
         <button type="button" class="btn ghost" data-close>Schließen</button>
@@ -136,6 +137,6 @@
 
   <script src="config.js"></script>
   <script>/* Startwitze nur im Demo-Modus laden */ if (!(window.LACHWERK_CONFIG || {}).supabaseUrl) document.write('<script src="startwitze.js"><\/script>');</script>
-    <script src="app.js?v=19"></script>
+    <script src="app.js?v=20"></script>
 </body>
 </html>

@@ -89,6 +89,9 @@ Für eine schon eingerichtete Datenbank einmal `erweiterung.sql` im SQL Editor a
 | Lieblingsthemen | Beim Bewerten und im Duell lassen sich Kategorien wählen (im Browser gespeichert). |
 | Wortfilter | Witze und Pointen mit gesperrten Wörtern werden abgelehnt. Liste unter `#/admin` → Wortfilter, `wort*` sperrt alle Wörter, die so beginnen. |
 | Bildschirm-Modus | `#/bildschirm` öffnet den Gestalter: Querformat 16:9 oder Hochformat 9:16 (auch für gedreht montierte Fernseher), Firmenfarben (Hintergrund, Akzent, Karte), Firmenname, Kategorien und Wechselzeit, mit Live-Vorschau. Ergebnis ist ein Link `#/tv?f=hoch&bg=…&ac=…&card=…&n=…&k=…&t=…` oder ein Kurzlink `lachwerk.github.io/tv/CODE` (Erweiterung 7, `404.html` leitet um). Antippen für Vollbild. |
+| Errate die Pointe | `#/quiz`: Tagesquiz mit 5 Witzanfängen (für alle gleich, Ergebnis teilbar, Vergleich mit anderen Spielern) und Endlos-Modus mit Serie. Pointe = letzte Zeile eines Witzes, falsche Antworten sind Pointen anderer Witze. Läuft auch als Folie im Bildschirm-Modus. |
+| Live-Duell | Bildschirm-Option `live=1` (im Wechsel) oder `live=2` (nur Duell): zwei Witze, 45 Sekunden, Zuschauer scannen den QR-Code (`/l/CODE` → `#/live/CODE`) und stimmen per Handy ab, die Balken wachsen live. |
+| Gruppen | `#/gruppen`, `#/gruppe/CODE`, Einladung über `/g/CODE`: eigene Bestenliste (Woche, Monat, Gesamt) und witzigste Mitglieder. Gründer kann umbenennen, Mitglieder entfernen, löschen. Bildschirm-Option `g=CODE`. Admin-Bereich → Nutzer zeigt alle Gruppen. |
 | Plakat | `plakat.html`: A4-Plakat mit QR-Code zum Ausdrucken (Hintergrundgrafiken einschalten). |
 | WhatsApp-Kanal | Beim Witz des Tages auf der Witz-Seite: „Text für WhatsApp-Kanal kopieren“ und das Story-Bild dazu teilen. |
 
@@ -154,6 +157,7 @@ erweiterung4.sql  Sponsoren, Kontakt, weitere Admins
 erweiterung5.sql  Push-Nachrichten (dazu supabase/functions/push/index.ts)
 erweiterung6.sql  Konto selbst löschen, Pointen melden
 erweiterung7.sql  Kurzlinks für Bildschirme (lachwerk.github.io/tv/CODE)
+erweiterung8.sql  Errate die Pointe, Live-Duell am Bildschirm, Gruppen und Ligen
 partner.html      Angebotsseite für Unternehmen
 plakat.html, qr.svg  Plakat mit QR-Code
 manifest.webmanifest, sw.js, icons/   installierbare App

@@ -252,6 +252,7 @@
     async sponsors() { const out = {}; for (const r of await rpc("get_sponsors", {})) out[r.placement] = r; return out; },
     async sponsor(id) { return (await rpc("get_sponsor", { p_id: id }))[0] || null; },
     async sponsorClick(id) { await rpc("sponsor_click", { p_id: id }); },
+    async adminGroups(key) { return rpc("admin_groups", { p_key: key }); },
     async contact() { return rpc("get_contact", {}); },
     async adminSponsors(key) { return rpc("admin_sponsors", { p_key: key }); },
     async adminSaveSponsor(key, x) { return rpc("admin_save_sponsor", { p_key: key, p_id: x.id || null, p_name: x.name, p_claim: x.claim, p_url: x.url, p_logo: x.logo, p_placement: x.placement, p_starts: x.starts, p_ends: x.ends }); },
@@ -563,20 +564,24 @@
     if (h === "autoren") return { view: "authors" };
     if (h === "challenge") return { view: "challenge" };
     if (h === "battle") return { view: "battle" };
-    if (h === "tv" || h.startsWith("tv?")) return { view: "tv", ...tvOpts(new URLSearchParams(h.slice(3))) };
+    if (h === "tv" || h.startsWith("tv?")) { const q = new URLSearchParams(h.slice(3)); return { view: "tv", ...tvOpts(q), raw: Object.fromEntries(q) }; }
     if (h.startsWith("tv/")) return { view: "tv", code: h.slice(3).replace(/[^0-9a-z]/gi, "").slice(0, 8).toUpperCase() };
     if (h === "bildschirm" || h.startsWith("bildschirm?")) return { view: "screen", q: new URLSearchParams(h.slice(11)) };
+    if (h === "quiz" || h.startsWith("quiz?")) return { view: "quiz", mode: h.includes("endlos") ? "endless" : null };
+    if (h.startsWith("live/")) return { view: "live", code: h.slice(5).replace(/[^0-9a-z]/gi, "").slice(0, 8).toUpperCase() };
+    if (h === "gruppen") return { view: "groups" };
+    if (h.startsWith("gruppe/")) return { view: "group", code: h.slice(7).replace(/[^0-9a-z]/gi, "").slice(0, 8).toUpperCase() };
     if (h.startsWith("kategorie/")) return { view: "list", cat: h.slice(10) };
     if (h.startsWith("u/")) { let n = h.slice(2); try { n = decodeURIComponent(n); } catch (e) { /* roh lassen */ } return { view: "profile", name: n }; }
     if (h === "admin") return { view: "admin" };
     return { view: "list" };
   }
   function renderNav(view) {
-    const items = [["#/", "list", "Bestenliste"], ["#/bewerten", "swipe", "Bewerten"], ["#/duell", "duel", "Duell"], ["#/battle", "battle", "Battle"], ["#/highlights", "highlights", "Highlights"], ["#/autoren", "authors", "Autoren"]];
+    const items = [["#/", "list", "Bestenliste"], ["#/bewerten", "swipe", "Bewerten"], ["#/duell", "duel", "Duell"], ["#/battle", "battle", "Battle"], ["#/quiz", "quiz", "Quiz"], ["#/highlights", "highlights", "Highlights"], ["#/autoren", "authors", "Autoren"]];
     if (S.adminKey || view === "admin" || isRoleAdmin()) items.push(["#/admin", "admin", "Moderation"]);
     $("#nav").innerHTML = items.map(([href, v, l]) => `<a href="${href}" ${view === v ? 'aria-current="page"' : ""}>${l}</a>`).join("");
     $("#listControls").style.display = view === "list" ? "grid" : "none";
-    $("#postBtn").hidden = view === "swipe" || view === "admin" || view === "duel" || view === "screen";
+    $("#postBtn").hidden = ["swipe", "admin", "duel", "screen", "quiz", "live"].includes(view);
     const cur = document.querySelector('.nav [aria-current="page"]'); if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: "nearest", inline: "nearest" });
     $("#who").textContent = AUTH ? "@" + (AUTH.username || "Konto") : "Anmelden";
     $("#who").title = AUTH ? "Dein Konto" : "Anmelden oder registrieren (nur zum Posten nötig)";
@@ -590,6 +595,7 @@
     const r = route(), token = ++renderToken;
     document.body.classList.toggle("tv-mode", r.view === "tv");
     if (r.view !== "tv") { stopTv(); document.body.style.removeProperty("--tv-page"); }
+    if (r.view !== "live") stopLive();
     if (r.cat && CATS[r.cat] && S.cat !== r.cat) { S.cat = r.cat; S.rows = []; renderChips(); }
     renderNav(r.view);
     try {
@@ -604,6 +610,10 @@
       else if (r.view === "battle") await renderBattle(token);
       else if (r.view === "tv") await renderTv(token, r);
       else if (r.view === "screen") await renderScreen(token, r);
+      else if (r.view === "quiz") await renderQuiz(token, r.mode);
+      else if (r.view === "live") await renderLive(token, r.code);
+      else if (r.view === "groups") await renderGroups(token);
+      else if (r.view === "group") await renderGroup(token, r.code);
       else await renderAdmin(token);
     } catch (e) {
       if (token !== renderToken) return;
@@ -1131,7 +1141,7 @@
     const monthName = new Date().toLocaleDateString("de-DE", { month: "long" });
     const next1 = new Date(); next1.setMonth(next1.getMonth() + 1, 1); next1.setHours(0, 0, 0, 0);
     $("#main").innerHTML = `<div class="view">
-      <div><h1>Witzbolde</h1><p class="muted">Die Autoren mit den meisten Lachern.</p></div>
+      <div><h1>Witzbolde</h1><p class="muted">Die Autoren mit den meisten Lachern. Eigene Liga für Studio, Firma oder Freunde? <a href="#/gruppen">Gruppe gründen</a></p></div>
       <div class="tabs" role="tablist">
         <button role="tab" data-authrange="week" aria-selected="${S.authorRange === "week"}">Woche</button>
         <button role="tab" data-authrange="month" aria-selected="${S.authorRange === "month"}">Saison</button>
@@ -1298,9 +1308,323 @@
     catch (ex) { if (ex.code === "not_logged_in") { setAuth(null); openAuth("login", ERRORS.not_logged_in, "battle"); } else err.textContent = errorText(ex); btn.disabled = false; }
   }
 
+  /* ───────── QR-Code (Version 3, Fehlerkorrektur M, Byte-Modus, bis 42 Zeichen) ───────── */
+  const qrSvg = (() => {
+    const SIZE = 29, NDATA = 44, NEC = 26, EXP = new Array(512).fill(0), LOG = new Array(256).fill(0);
+    for (let i = 0, x = 1; i < 255; i++) { EXP[i] = x; LOG[x] = i; x <<= 1; if (x & 0x100) x ^= 0x11d; }
+    for (let i = 255; i < 512; i++) EXP[i] = EXP[i - 255];
+    const mul = (a, b) => (a && b ? EXP[LOG[a] + LOG[b]] : 0);
+    let gen = [1];
+    for (let i = 0; i < NEC; i++) { const ng = new Array(gen.length + 1).fill(0); gen.forEach((c, j) => { ng[j] ^= c; ng[j + 1] ^= mul(c, EXP[i]); }); gen = ng; }
+    const ecc = (data) => { const res = [...data, ...new Array(NEC).fill(0)]; for (let i = 0; i < data.length; i++) { const c = res[i]; if (c) for (let j = 1; j < gen.length; j++) res[i + j] ^= mul(gen[j], c); } return res.slice(data.length); };
+    const MASKS = [(r, c) => (r + c) % 2 === 0, (r) => r % 2 === 0, (r, c) => c % 3 === 0, (r, c) => (r + c) % 3 === 0,
+      (r, c) => (Math.floor(r / 2) + Math.floor(c / 3)) % 2 === 0, (r, c) => ((r * c) % 2) + ((r * c) % 3) === 0,
+      (r, c) => (((r * c) % 2) + ((r * c) % 3)) % 2 === 0, (r, c) => (((r + c) % 2) + ((r * c) % 3)) % 2 === 0];
+    const fmtBits = (mask) => { const d = (0 << 3) | mask; let v = d << 10; for (let i = 14; i >= 10; i--) if (v & (1 << i)) v ^= 0x537 << (i - 10); return ((d << 10) | v) ^ 0x5412; };
+    return (text) => {
+      const bytes = [...new TextEncoder().encode(text)]; if (bytes.length > 42) return "";
+      let bits = "0100" + bytes.length.toString(2).padStart(8, "0") + bytes.map((b) => b.toString(2).padStart(8, "0")).join("");
+      bits += "0".repeat(Math.min(4, NDATA * 8 - bits.length)); bits += "0".repeat((8 - (bits.length % 8)) % 8);
+      const cw = []; for (let i = 0; i < bits.length; i += 8) cw.push(parseInt(bits.slice(i, i + 8), 2));
+      for (let i = 0; cw.length < NDATA; i++) cw.push(i % 2 ? 0x11 : 0xec);
+      const all = [...cw, ...ecc(cw)];
+      const M = Array.from({ length: SIZE }, () => new Array(SIZE).fill(null));
+      const finder = (r, c) => { for (let dr = -1; dr < 8; dr++) for (let dc = -1; dc < 8; dc++) { const rr = r + dr, cc = c + dc; if (rr < 0 || cc < 0 || rr >= SIZE || cc >= SIZE) continue;
+        M[rr][cc] = ((dr >= 0 && dr <= 6 && (dc === 0 || dc === 6)) || (dc >= 0 && dc <= 6 && (dr === 0 || dr === 6)) || (dr >= 2 && dr <= 4 && dc >= 2 && dc <= 4)) ? 1 : 0; } };
+      finder(0, 0); finder(0, SIZE - 7); finder(SIZE - 7, 0);
+      for (let i = 8; i < SIZE - 8; i++) M[6][i] = M[i][6] = i % 2 === 0 ? 1 : 0;
+      for (let dr = -2; dr <= 2; dr++) for (let dc = -2; dc <= 2; dc++) M[22 + dr][22 + dc] = Math.max(Math.abs(dr), Math.abs(dc)) !== 1 ? 1 : 0;
+      M[SIZE - 8][8] = 1;
+      const res = M.map((row) => row.map((v) => v !== null));
+      const pos1 = [[8, 0], [8, 1], [8, 2], [8, 3], [8, 4], [8, 5], [8, 7], [8, 8], [7, 8], [5, 8], [4, 8], [3, 8], [2, 8], [1, 8], [0, 8]];
+      const pos2 = [[SIZE - 1, 8], [SIZE - 2, 8], [SIZE - 3, 8], [SIZE - 4, 8], [SIZE - 5, 8], [SIZE - 6, 8], [SIZE - 7, 8], [8, SIZE - 8], [8, SIZE - 7], [8, SIZE - 6], [8, SIZE - 5], [8, SIZE - 4], [8, SIZE - 3], [8, SIZE - 2], [8, SIZE - 1]];
+      [...pos1, ...pos2].forEach(([r, c]) => (res[r][c] = true));
+      const dbits = all.map((b) => b.toString(2).padStart(8, "0")).join("");
+      for (let c = SIZE - 1, k = 0, up = true; c > 0; c -= 2, up = !up) {
+        if (c === 6) c--;
+        for (let n = 0; n < SIZE; n++) { const r = up ? SIZE - 1 - n : n; for (const cc of [c, c - 1]) if (!res[r][cc]) { M[r][cc] = k < dbits.length ? +dbits[k] : 0; k++; } }
+      }
+      const build = (mask) => {
+        const A = M.map((row, r) => row.map((v, c) => (!res[r][c] && MASKS[mask](r, c) ? v ^ 1 : v)));
+        const f = fmtBits(mask);
+        for (let i = 0; i < 15; i++) { const bit = (f >> (14 - i)) & 1; A[pos1[i][0]][pos1[i][1]] = bit; A[pos2[i][0]][pos2[i][1]] = bit; }
+        return A;
+      };
+      const penalty = (A) => {
+        let p = 0; const cols = A[0].map((_, c) => A.map((row) => row[c]));
+        for (const line of [...A, ...cols]) { let run = 1; for (let i = 1; i < SIZE; i++) { if (line[i] === line[i - 1]) run++; else { if (run >= 5) p += run - 2; run = 1; } } if (run >= 5) p += run - 2; }
+        for (let r = 0; r < SIZE - 1; r++) for (let c = 0; c < SIZE - 1; c++) if (A[r][c] === A[r][c + 1] && A[r][c] === A[r + 1][c] && A[r][c] === A[r + 1][c + 1]) p += 3;
+        const dark = A.flat().reduce((s, v) => s + v, 0); p += Math.abs(Math.floor((dark * 20) / (SIZE * SIZE)) - 10) * 10;
+        return p;
+      };
+      let best = 0, bp = Infinity; for (let m = 0; m < 8; m++) { const p = penalty(build(m)); if (p < bp) { bp = p; best = m; } }
+      const A = build(best), q = 4, n = SIZE + 2 * q;
+      let d = ""; for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) if (A[r][c]) d += `M${c + q} ${r + q}h1v1h-1z`;
+      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${n} ${n}" shape-rendering="crispEdges"><rect width="${n}" height="${n}" fill="#fff"/><path fill="#15172a" d="${d}"/></svg>`;
+    };
+  })();
+
+  const baseUrl = () => location.origin + location.pathname.replace(/[^/]*$/, "");
+  const liveOnly = () => `<div class="view"><p class="empty">Diese Funktion gibt es nur in der Live-Version mit Datenbank.</p></div>`;
+
+  /* ───────── Errate die Pointe ───────── */
+  const QZ = { list: [], i: 0, mode: "daily", picked: null, answers: [], streak: 0, loading: false };
+  const berlinDay = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Berlin" });
+  const quizRow = (r) => ({ id: Number(r.id), setup: r.setup, options: r.options, correct: Number(r.correct), cat: r.cat, author: r.author });
+  const quizEmoji = (a) => a.map((x) => (x ? "🟩" : "🟥")).join("");
+  async function renderQuiz(token, mode) {
+    if (!LIVE) { $("#main").innerHTML = liveOnly(); return; }
+    const today = berlinDay(), done = store.get("quiz_daily", null);
+    QZ.picked = null;
+    if (mode !== "endless" && done && done.day === today) { QZ.mode = "result"; drawQuiz(); return; }
+    $("#main").innerHTML = '<p class="loading">Lade Quiz …</p>';
+    if (mode === "endless") {
+      QZ.mode = "endless"; QZ.i = 0; QZ.streak = 0;
+      QZ.list = (await rpc("get_quiz", { p_daily: false, p_n: 10, p_cats: S.favs.length ? S.favs : null })).map(quizRow);
+    } else {
+      QZ.mode = "daily";
+      QZ.list = (await rpc("get_quiz", { p_daily: true, p_n: 5 })).map(quizRow);
+      const prog = store.get("quiz_progress", null);
+      QZ.answers = prog && prog.day === today ? prog.answers : [];
+      QZ.i = Math.min(QZ.answers.length, QZ.list.length);
+      if (QZ.i >= QZ.list.length && QZ.list.length) { await finishDaily(); return; }
+    }
+    if (stale(token)) return;
+    drawQuiz();
+  }
+  function drawQuiz() {
+    const best = store.get("quiz_best", 0);
+    if (QZ.mode === "result") {
+      const d = store.get("quiz_daily", {}), a = d.answers || [], score = a.filter(Boolean).length, c = d.cmp;
+      const pct = c && c.players > 1 ? Math.round(((c.worse + Math.max(c.same - 1, 0) / 2) / (c.players - 1)) * 100) : null;
+      $("#main").innerHTML = `<div class="view quiz">
+        <div><h1>Errate die Pointe</h1><p class="muted">Jeden Tag 5 Witzanfänge, für alle dieselben. Welche Pointe gehört dazu?</p></div>
+        <section class="panel quiz-result">
+          <span class="quiz-k">Tagesquiz ${new Date().toLocaleDateString("de-DE", { day: "numeric", month: "long" })}</span>
+          <div class="quiz-emoji">${quizEmoji(a)}</div>
+          <b class="quiz-score">${score} von ${a.length} richtig</b>
+          <p class="muted">${score === 5 ? "Perfekt! Du kennst deine Pointen." : score >= 3 ? "Starke Leistung!" : "Morgen gibt es neue Chancen."}${pct ? ` Besser als ${pct} % der ${fmt(c.players)} Spieler von heute.` : c && c.players > 1 ? ` Heute haben schon ${fmt(c.players)} Leute mitgerätselt.` : ""}</p>
+          <div class="row"><button class="btn" data-quiz-share>Ergebnis teilen</button><a class="btn ghost" href="#/quiz?endlos">Endlos weiterspielen</a></div>
+          <p class="small muted">Das nächste Tagesquiz gibt es ab Mitternacht.${best ? ` Dein Rekord im Endlos-Modus: ${best} in Folge.` : ""}</p>
+        </section>
+      </div>`;
+      return;
+    }
+    const q = QZ.list[QZ.i];
+    if (!q) { $("#main").innerHTML = `<div class="view"><p class="empty">Gerade gibt es keine passenden Witze für das Quiz.</p></div>`; return; }
+    const answered = QZ.picked != null, right = answered && QZ.picked === q.correct;
+    const head = QZ.mode === "daily"
+      ? `<span class="quiz-k">Tagesquiz · Frage ${QZ.i + 1} von ${QZ.list.length}</span><span class="quiz-dots">${QZ.list.map((_, i) => `<i class="${i < QZ.answers.length ? (QZ.answers[i] ? "ok" : "no") : i === QZ.i ? "now" : ""}"></i>`).join("")}</span>`
+      : `<span class="quiz-k">Endlos · Serie ${QZ.streak}</span><span class="quiz-k">Rekord ${best}</span>`;
+    const last = QZ.mode === "daily" && QZ.i === QZ.list.length - 1;
+    $("#main").innerHTML = `<div class="view quiz">
+      <div><h1>Errate die Pointe</h1><p class="muted">Welche Pointe gehört zu diesem Witz?</p></div>
+      <section class="panel quiz-card">
+        <div class="quiz-head">${head}</div>
+        <p class="quiz-setup">${esc(q.setup)}</p>
+        <div class="quiz-opts">${q.options.map((o, i) => {
+          const n = i + 1, cls = answered ? (n === q.correct ? " right" : n === QZ.picked ? " wrong" : " dim") : "";
+          return `<button class="quiz-opt${cls}" data-quiz-opt="${n}"${answered ? " disabled" : ""}><b>${"ABC"[i]}</b><span>${esc(o)}</span></button>`;
+        }).join("")}</div>
+        ${answered ? `<div class="quiz-after">
+          <b class="quiz-verdict ${right ? "ok" : "no"}">${right ? "Richtig! 🎉" : QZ.mode === "endless" ? `Daneben. Deine Serie: ${QZ.streak}` : "Leider daneben."}</b>
+          <span class="muted small">Witz von ${authorLink(q.author)} · ${CATS[q.cat] || ""} · <a href="#/witz/${q.id}">Witz ansehen</a></span>
+          <button class="btn" data-quiz-next>${last ? "Ergebnis ansehen" : QZ.mode === "endless" && !right ? "Neue Serie" : "Weiter"}</button>
+        </div>` : `<p class="small muted quiz-hint">Tipp: Die Tasten 1, 2 und 3 gehen auch.</p>`}
+      </section>
+      ${QZ.mode === "endless" ? `<p class="small muted on-y"><a href="#/quiz">Zum Tagesquiz</a></p>` : ""}
+    </div>`;
+  }
+  function quizAnswer(n) {
+    const q = QZ.list[QZ.i]; if (!q || QZ.picked != null) return;
+    QZ.picked = n; const ok = n === q.correct;
+    if (QZ.mode === "daily") { QZ.answers = [...QZ.answers, ok]; store.set("quiz_progress", { day: berlinDay(), answers: QZ.answers }); }
+    else { if (ok) { QZ.streak++; if (QZ.streak > store.get("quiz_best", 0)) store.set("quiz_best", QZ.streak); } }
+    markActivity && markActivity();
+    drawQuiz();
+  }
+  async function quizNext() {
+    const q = QZ.list[QZ.i]; if (!q || QZ.picked == null) return;
+    const wasRight = QZ.picked === q.correct;
+    QZ.picked = null; QZ.i++;
+    if (QZ.mode === "daily") { if (QZ.i >= QZ.list.length) { await finishDaily(); return; } }
+    else {
+      if (!wasRight) QZ.streak = 0;
+      if (QZ.i >= QZ.list.length - 3 && !QZ.loading) {
+        QZ.loading = true;
+        try { const more = (await rpc("get_quiz", { p_daily: false, p_n: 10, p_cats: S.favs.length ? S.favs : null })).map(quizRow); const seen = new Set(QZ.list.map((x) => x.id)); QZ.list.push(...more.filter((x) => !seen.has(x.id))); }
+        catch (e) { /* später erneut */ }
+        QZ.loading = false;
+      }
+    }
+    drawQuiz();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+  async function finishDaily() {
+    const answers = QZ.answers, score = answers.filter(Boolean).length, day = berlinDay();
+    let cmp = null; try { cmp = (await rpc("submit_quiz", { p_device: DEVICE, p_score: score }))[0] || null; } catch (e) { /* ohne Vergleich */ }
+    store.set("quiz_daily", { day, answers, cmp });
+    QZ.mode = "result"; drawQuiz();
+  }
+  async function quizShare() {
+    const d = store.get("quiz_daily", {}), a = d.answers || [];
+    const text = `Lachwerk-Tagesquiz ${new Date().toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })}\n${quizEmoji(a)} ${a.filter(Boolean).length}/${a.length}\nErrätst du die Pointen?`;
+    const url = baseUrl() + "#/quiz";
+    if (navigator.share) { try { await navigator.share({ text, url }); return; } catch (e) { if (e.name === "AbortError") return; } }
+    const all = text + "\n" + url;
+    if (navigator.clipboard) navigator.clipboard.writeText(all).then(() => toast("Ergebnis kopiert."), () => window.open("https://wa.me/?text=" + encodeURIComponent(all), "_blank"));
+    else window.open("https://wa.me/?text=" + encodeURIComponent(all), "_blank");
+  }
+
+  /* ───────── Live-Duell: Abstimmen am Handy (#/live/CODE) ───────── */
+  const LV = { timer: null, clock: null, code: null, round: null, skew: 0, key: "" };
+  function stopLive() { clearTimeout(LV.timer); clearInterval(LV.clock); LV.timer = LV.clock = null; }
+  const lvLeft = (r) => Math.max(0, Math.ceil((new Date(r.ends_at).getTime() - (Date.now() - LV.skew)) / 1000));
+  const lvPct = (r) => { const n = r.a_votes + r.b_votes; return n ? [Math.round((r.a_votes / n) * 100), 100 - Math.round((r.a_votes / n) * 100)] : [0, 0]; };
+  async function renderLive(token, code) {
+    stopLive(); LV.code = code; LV.key = ""; LV.round = null;
+    if (!LIVE) { $("#main").innerHTML = liveOnly(); return; }
+    $("#main").innerHTML = '<p class="loading">Verbinde mit dem Bildschirm …</p>';
+    LV.clock = setInterval(() => { const el = $("#lvSec"); if (el && LV.round) el.textContent = lvLeft(LV.round); }, 500);
+    await liveTick(token);
+  }
+  async function liveTick(token) {
+    if (stale(token)) return;
+    let r = null;
+    try { r = (await rpc("live_round", { p_screen: LV.code, p_device: DEVICE, p_start: false }))[0] || null; }
+    catch (e) { if (e.code === "invalid_screen") { stopLive(); $("#main").innerHTML = `<div class="view"><p class="empty">Diesen Bildschirm-Code gibt es nicht. Scanne den QR-Code am Bildschirm noch einmal.</p></div>`; return; } }
+    if (stale(token)) return;
+    if (r) { LV.skew = Date.now() - new Date(r.server_now).getTime(); r.a_votes = Number(r.a_votes); r.b_votes = Number(r.b_votes); }
+    if (!(LV.round && r && LV.round.id === r.id && LV.round.my_choice && !r.my_choice)) LV.round = r; else LV.round = { ...r, my_choice: LV.round.my_choice };
+    drawLive();
+    LV.timer = setTimeout(() => liveTick(token), r && !r.finished ? 2000 : 3000);
+  }
+  function drawLive() {
+    const r = LV.round;
+    const fresh = r && (!r.finished || Date.now() - LV.skew - new Date(r.ends_at).getTime() < 40000);
+    const key = !fresh ? "wait" : `${r.id}-${r.finished}-${r.my_choice || 0}`;
+    if (key === LV.key && fresh) { // nur Zahlen aktualisieren
+      const [pa, pb] = lvPct(r);
+      [[1, pa, r.a_votes], [2, pb, r.b_votes]].forEach(([n, p, v]) => { const b = $(`#lvBar${n}`), t = $(`#lvPct${n}`); if (b) b.style.width = p + "%"; if (t) t.textContent = `${p} % · ${fmt(v)} ${v === 1 ? "Stimme" : "Stimmen"}`; });
+      return;
+    }
+    LV.key = key;
+    if (!fresh) {
+      $("#main").innerHTML = `<div class="view live"><section class="panel live-wait"><span class="live-k">⚡ Live-Duell</span><h1>Gleich geht's los</h1>
+        <p class="muted">Schau auf den Bildschirm: Sobald dort das nächste Duell startet, kannst du hier abstimmen. Diese Seite aktualisiert sich von selbst.</p>
+        <p class="loading">Warte auf die nächste Runde …</p></section>
+        <p class="small muted on-y">Zwischendurch: <a href="#/quiz">Errate die Pointe</a> · <a href="#/">Bestenliste</a></p></div>`;
+      return;
+    }
+    const [pa, pb] = lvPct(r), voted = !!r.my_choice, show = voted || r.finished, win = r.finished ? (r.a_votes > r.b_votes ? 1 : r.b_votes > r.a_votes ? 2 : 0) : 0;
+    const card = (n, text, p, v) => `<button class="live-opt${r.my_choice === n ? " mine" : ""}${win === n ? " win" : ""}${win && win !== n ? " lose" : ""}" data-live-vote="${n}"${r.finished ? " disabled" : ""}>
+        <b class="live-l">${"AB"[n - 1]}</b><span class="live-t">${esc(text)}</span>
+        ${show ? `<span class="live-bar"><i id="lvBar${n}" style="width:${p}%"></i></span><span class="live-pct" id="lvPct${n}">${p} % · ${fmt(v)} ${v === 1 ? "Stimme" : "Stimmen"}</span>` : `<span class="live-pick">Der ist lustiger</span>`}
+      </button>`;
+    $("#main").innerHTML = `<div class="view live">
+      <div class="live-head"><span class="live-k">⚡ Live-Duell</span>${r.finished ? `<b>${win ? `${"AB"[win - 1]} gewinnt!` : r.a_votes + r.b_votes ? "Unentschieden!" : "Runde vorbei"}</b>` : `<b>Noch <span id="lvSec">${lvLeft(r)}</span> s</b>`}</div>
+      <p class="muted on-y">${r.finished ? "Die nächste Runde startet gleich auf dem Bildschirm." : voted ? "Danke! Du kannst deine Wahl bis zum Ende noch ändern." : "Welcher Witz ist lustiger? Tippe auf deinen Favoriten."}</p>
+      <div class="live-pair">${card(1, r.a_text, pa, r.a_votes)}${card(2, r.b_text, pb, r.b_votes)}</div>
+    </div>`;
+  }
+  async function liveVote(n) {
+    const r = LV.round; if (!r || r.finished) return;
+    const prev = r.my_choice; if (prev === n) return;
+    if (prev === 1) r.a_votes--; if (prev === 2) r.b_votes--;
+    if (n === 1) r.a_votes++; else r.b_votes++;
+    r.my_choice = n; drawLive();
+    try { await rpc("live_vote", { p_device: DEVICE, p_round: r.id, p_choice: n }); }
+    catch (e) { toast(e.code === "round_over" ? "Diese Runde ist schon vorbei." : errorText(e)); }
+  }
+
+  /* ───────── Gruppen und Ligen ───────── */
+  const GR_ERR = { group_not_found: "Diese Gruppe gibt es nicht. Prüfe den Code.", group_limit: "Du kannst höchstens 5 Gruppen gründen und in 30 Gruppen Mitglied sein.",
+    group_full: "Diese Gruppe ist voll.", owner_cannot_leave: "Als Gründer kannst du nicht austreten. Du kannst die Gruppe aber löschen.", not_owner: "Das darf nur der Gründer der Gruppe.",
+    invalid_group_name: "Der Gruppenname braucht 3 bis 40 Zeichen." };
+  Object.assign(ERRORS, GR_ERR, { invalid_screen: "Diesen Bildschirm-Code gibt es nicht.", round_over: "Diese Runde ist schon vorbei." });
+  const groupUrl = (code) => baseUrl() + "g/" + code;
+  async function renderGroups(token) {
+    if (!LIVE) { $("#main").innerHTML = liveOnly(); return; }
+    $("#main").innerHTML = '<p class="loading">Lade Gruppen …</p>';
+    const mine = AUTH ? await rpc("my_groups", {}).catch(() => []) : [];
+    if (stale(token)) return;
+    $("#main").innerHTML = `<div class="view groups">
+      <div><h1>Gruppen</h1><p class="muted">Eure eigene Liga: für Studio, Firma, Verein, Klasse oder Freundeskreis. Alle posten wie gewohnt, die Gruppe bekommt ihre eigene Bestenliste und ihren Witzbold des Monats. Auf Wunsch auch auf dem Bildschirm im Studio oder Büro.</p></div>
+      ${AUTH ? `${mine.length ? `<section class="hl-sec"><h2>Deine Gruppen</h2><ul class="grp-list">${mine.map((g) => `<li><a href="#/gruppe/${g.code}"><b>${esc(g.name)}</b><span>${fmt(g.members)} ${g.members === 1 ? "Mitglied" : "Mitglieder"}${g.is_owner ? " · von dir gegründet" : ""}</span></a></li>`).join("")}</ul></section>` : ""}
+        <div class="grp-forms">
+          <form class="panel form" id="groupCreate"><h2>Gruppe gründen</h2>
+            <label>Name der Gruppe<input type="text" id="groupName" maxlength="40" placeholder="z. B. CityFit Lübeck" required autocomplete="off"></label>
+            <button class="btn">Gründen</button><p class="err small" id="groupCreateErr"></p></form>
+          <form class="panel form" id="groupJoin"><h2>Gruppe beitreten</h2>
+            <label>Einladungscode<input type="text" id="groupCode" maxlength="6" placeholder="z. B. K7P2QX" required autocomplete="off" autocapitalize="characters" spellcheck="false"></label>
+            <button class="btn ghost">Beitreten</button><p class="err small" id="groupJoinErr"></p></form>
+        </div>`
+      : `<section class="panel"><p>Zum Gründen und Beitreten brauchst du ein Konto. Das geht in einer Minute und ohne E-Mail-Bestätigung.</p><div><button class="btn" data-group-login>Anmelden oder registrieren</button></div></section>`}
+      <section class="how"><h2>So funktioniert's</h2><p>Gründe eine Gruppe und teile den Einladungslink. Wer beitritt, zählt mit seinen Witzen für die Gruppe: Bestenliste der Woche, des Monats und aller Zeiten, dazu die witzigsten Mitglieder. Die Witze bleiben ganz normale öffentliche Lachwerk-Witze.</p></section>
+    </div>`;
+  }
+  async function renderGroup(token, code) {
+    if (!LIVE) { $("#main").innerHTML = liveOnly(); return; }
+    $("#main").innerHTML = '<p class="loading">Lade Gruppe …</p>';
+    const range = S.groupRange || "week";
+    const [g, jokes, members] = await Promise.all([rpc("get_group", { p_code: code }).then((x) => x[0] || null),
+      rpc("group_ranking", { p_device: DEVICE, p_code: code, p_range: range, p_limit: 20 }).then((x) => x.map(fromRow)).catch(() => []),
+      rpc("group_members_ranking", { p_code: code, p_range: range }).catch(() => [])]);
+    if (stale(token)) return;
+    if (!g) { $("#main").innerHTML = `<div class="view"><p class="empty">Diese Gruppe gibt es nicht (mehr).<br><a class="btn" href="#/gruppen" style="margin-top:12px">Zu den Gruppen</a></p></div>`; return; }
+    const url = groupUrl(g.code), active = members.filter((m) => m.jokes > 0);
+    const title = { week: "Witzbold der Woche", month: "Witzbold des Monats", all: "Allzeit-Bester" }[range];
+    const invite = `Mach mit in unserer Witze-Liga „${g.name}“ auf Lachwerk: ${url}`;
+    $("#main").innerHTML = `<div class="view group">
+      <section class="grp-hero">
+        <span class="live-k">👥 Gruppe</span>
+        <h1>${esc(g.name)}</h1>
+        <p>${fmt(g.members)} ${g.members === 1 ? "Mitglied" : "Mitglieder"} · gegründet von @${esc(g.owner_name || "?")}</p>
+        <div class="row">${g.is_member ? `<span class="pill">Du bist dabei</span>` : `<button class="btn" data-group-join="${g.code}">Beitreten</button>`}
+          ${g.is_member ? `<button class="btn ghost on-dark" data-post-open>Witz posten</button>` : ""}</div>
+      </section>
+      <div class="tabs" role="tablist">${[["week", "Woche"], ["month", "Monat"], ["all", "Gesamt"]].map(([k, l]) => `<button role="tab" data-grouprange="${k}" aria-selected="${range === k}">${l}</button>`).join("")}</div>
+      <section class="hl-sec"><h2>Witzigste Mitglieder</h2>
+        ${active.length ? `<ol class="authors">${active.slice(0, 10).map((a, i) => `<li><a href="#/u/${encodeURIComponent(a.username)}"><span class="a-rank">${i + 1}</span>
+          <span class="a-name">@${esc(a.username)}${i === 0 ? ` <span class="pill">${title}</span>` : ""}</span>
+          <span class="a-meta">${a.jokes} ${a.jokes === 1 ? "Witz" : "Witze"} · ${fmt(a.up_count)} Likes</span></a></li>`).join("")}</ol>`
+        : `<p class="empty">${range === "all" ? "Noch hat niemand aus der Gruppe einen Witz gepostet." : "In diesem Zeitraum hat noch niemand aus der Gruppe gepostet."} Fang an!</p>`}
+      </section>
+      <section class="hl-sec"><h2>Beste Witze der Gruppe</h2>
+        ${jokes.length ? `<ol class="list">${jokes.map((j, i) => cardHtml(j, i + 1, "")).join("")}</ol>` : `<p class="empty">Noch keine Witze in diesem Zeitraum.</p>`}
+      </section>
+      <section class="panel grp-invite"><h2>Leute einladen</h2>
+        <p class="muted small">Einladungscode <b class="grp-code">${g.code}</b> oder Link teilen:</p>
+        <input type="text" readonly value="${esc(url)}" aria-label="Einladungslink">
+        <div class="row"><button class="btn" data-group-copy="${esc(url)}">Link kopieren</button><a class="btn ghost" href="https://wa.me/?text=${encodeURIComponent(invite)}" target="_blank" rel="noopener">Per WhatsApp</a><button class="btn ghost" data-group-qr>QR-Code</button></div>
+        <div class="grp-qr" id="groupQr" hidden>${qrSvg(url)}<span>Zum Aushängen: scannen und beitreten</span></div>
+      </section>
+      ${g.is_owner ? `<details class="panel grp-admin"><summary>Gruppe verwalten</summary>
+        <form class="form" data-group-manage="rename"><label>Neuer Name<input type="text" name="v" maxlength="40" value="${esc(g.name)}"></label><button class="btn ghost">Umbenennen</button></form>
+        <form class="form" data-group-manage="remove"><label>Mitglied entfernen (Benutzername)<input type="text" name="v" maxlength="24" placeholder="@name"></label><button class="btn ghost">Entfernen</button></form>
+        <p><a class="btn ghost" href="#/bildschirm?g=${g.code}">Bildschirm-Link für diese Gruppe</a></p>
+        <p><button class="btn danger" data-group-delete="${g.code}">Gruppe löschen</button></p>
+      </details>` : g.is_member ? `<p class="small on-y"><button class="link" data-group-leave="${g.code}">Gruppe verlassen</button></p>` : ""}
+    </div>`;
+  }
+  async function groupAction(fn, args, okMsg, then) {
+    try { const r = await rpc(fn, args); if (okMsg) toast(okMsg); if (then) then(r); else render(); }
+    catch (e) { toast(errorText(e)); }
+  }
+  function groupJoin(code) {
+    if (!AUTH) { openAuth("signup", "Zum Beitreten brauchst du ein Konto. Danach bist du sofort dabei.", () => groupJoin(code)); return; }
+    groupAction("join_group", { p_code: code }, null, (name) => { toast(`Willkommen in „${name}“!`); const c = code.toUpperCase(); if (location.hash === "#/gruppe/" + c) render(); else location.hash = "#/gruppe/" + c; });
+  }
+  async function adminGroupsHtml() {
+    const rows = API.adminGroups ? await API.adminGroups(AK()).catch(() => []) : [];
+    return `<section class="panel"><h2>Gruppen (${rows.length})</h2>${rows.length ? `<ul class="mod-list">${rows.map((g) => `<li><b><a href="#/gruppe/${g.code}">${esc(g.name)}</a></b>
+      <span class="muted small">${g.code} · ${fmt(g.members)} Mitglieder · von @${esc(g.owner_name || "?")} · ${new Date(g.created_at).toLocaleDateString("de-DE")}</span>
+      <div class="row"><button class="btn danger" data-admin-group-del="${g.code}">Löschen</button></div></li>`).join("")}</ul>` : '<p class="muted small">Noch keine Gruppen.</p>'}</section>`;
+  }
+
   /* ───────── Bildschirm-Modus (z. B. für Fernseher im Studio) ───────── */
   // Einstellungen aus dem Link: k=Kategorien, s=Sponsor, f=hoch|quer, dreh=r|l (gedreht montiert),
-  // bg/ac/card=Farben (Hex ohne #), n=Firmenname, t=Sekunden pro Folie
+  // bg/ac/card=Farben (Hex ohne #), n=Firmenname, t=Sekunden pro Folie, live=1|2 (Live-Duell im Wechsel | nur), g=Gruppen-Code
   const HEX6 = (v) => (/^[0-9a-f]{6}$/i.test(v || "") ? "#" + v.toLowerCase() : null);
   function tvOpts(q) {
     const get = (k) => (q.get(k) || "").trim();
@@ -1309,6 +1633,8 @@
       format: ["hoch", "quer"].includes(get("f")) ? get("f") : null, rot: ["l", "r"].includes(get("dreh")) ? get("dreh") : null,
       bg: HEX6(get("bg")), ac: HEX6(get("ac")), card: HEX6(get("card")),
       name: get("n").slice(0, 40), sec: Math.min(60, Math.max(6, Number(get("t")) || 12)),
+      live: ["1", "2"].includes(get("live")) ? get("live") : null, group: get("g").replace(/[^0-9a-z]/gi, "").slice(0, 6).toUpperCase() || null,
+      preview: get("vorschau") === "1",
     };
   }
   const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
@@ -1323,22 +1649,39 @@
     const tx = contrast(ac, bg) >= 3 ? ac : bestOn(bg), ctx = contrast(ac, card) >= 4.5 ? ac : bestOn(card);
     return `--yellow:${bg};--ink:${ac};--paper:${card};--tv-tx:${tx};--tv-ctx:${ctx};--muted-on-yellow:${mixHex(tx, bg, 0.25)}`;
   }
-  const TV = { timer: null, refresh: null, slides: [], i: 0, opt: {} };
-  function stopTv() { clearInterval(TV.timer); clearInterval(TV.refresh); TV.timer = TV.refresh = null; }
+  const TV = { timer: null, refresh: null, poll: null, clock: null, reveal: null, slides: [], i: 0, opt: {}, active: false, gen: 0, live: null, revealed: false };
+  function stopTv() {
+    TV.active = false; TV.gen++; TV.live = null;
+    clearTimeout(TV.timer); clearInterval(TV.refresh); clearInterval(TV.poll); clearInterval(TV.clock); clearTimeout(TV.reveal);
+    TV.timer = TV.refresh = TV.poll = TV.clock = TV.reveal = null;
+  }
   async function loadTv(opt) {
     const safe = (p, d) => p.catch(() => d);
-    const cats = (opt && opt.cats) || [];
-    const [daily, todayAll, battle, brand] = await Promise.all([safe(API.daily(1), []), safe(API.ranking("day", null, cats.length ? 60 : 6, 0), []), safe(API.battleToday(), null),
-      opt && opt.sponsor ? safe(API.sponsor(opt.sponsor), null) : opt && opt.name ? null : loadSponsors().then((x) => x.tv || null)]);
+    const cats = (opt && opt.cats) || [], grp = opt && opt.group && LIVE ? opt.group : null;
+    const [daily, todayAll, battle, brand, quiz, group, gJokes, gMembers] = await Promise.all([safe(API.daily(1), []), safe(API.ranking("day", null, cats.length ? 60 : 6, 0), []), safe(API.battleToday(), null),
+      opt && opt.sponsor ? safe(API.sponsor(opt.sponsor), null) : opt && opt.name ? null : loadSponsors().then((x) => x.tv || null),
+      LIVE ? safe(rpc("get_quiz", { p_daily: false, p_n: 2, p_cats: cats.length ? cats : null }), []) : [],
+      grp ? safe(rpc("get_group", { p_code: grp }).then((x) => x[0] || null), null) : null,
+      grp ? safe(rpc("group_ranking", { p_device: DEVICE, p_code: grp, p_range: "week", p_limit: 5 }).then((x) => x.map(fromRow)), []) : [],
+      grp ? safe(rpc("group_members_ranking", { p_code: grp, p_range: "month" }), []) : []]);
     let today = cats.length ? todayAll.filter((j) => cats.includes(j.cat)) : todayAll;
     if (cats.length && today.length < 3) today = (await safe(API.ranking("week", null, 80, 0), [])).filter((j) => cats.includes(j.cat));
     TV.brand = brand || (opt && opt.name ? { name: opt.name } : null);
+    TV.group = group;
     let best = battle ? (await safe(API.battleEntries(battle.id), []))[0] : null;
     const slides = [];
+    if (opt && opt.live === "2") { TV.slides = [{ live: true }]; return; }
+    if (group) {
+      const top = gMembers.find((m) => m.jokes > 0);
+      if (top) slides.push({ k: `🏆 Witzigstes Mitglied im ${new Date().toLocaleDateString("de-DE", { month: "long" })}`, t: `@${top.username}\n${fmt(top.up_count)} Likes mit ${top.jokes} ${top.jokes === 1 ? "Witz" : "Witzen"}`, m: group.name });
+      gJokes.forEach((j, i) => slides.push({ k: `${group.name} · Platz ${i + 1} der Woche`, t: j.text, m: `@${j.author} · ${fmt(j.up)} Likes` }));
+    }
     if (daily[0] && (!cats.length || cats.includes(daily[0].cat))) slides.push({ k: "👑 Witz des Tages · " + fmtDay(daily[0].day), t: daily[0].text, m: "@" + daily[0].author });
-    today.slice(0, cats.length ? 8 : 5).forEach((j, i) => slides.push({ k: cats.length ? CATS[j.cat] : `Heute auf Platz ${i + 1}`, t: j.text, m: `@${j.author} · ${fmt(j.up)} Likes` }));
+    today.slice(0, group ? 3 : cats.length ? 8 : 5).forEach((j, i) => slides.push({ k: cats.length ? CATS[j.cat] : `Heute auf Platz ${i + 1}`, t: j.text, m: `@${j.author} · ${fmt(j.up)} Likes` }));
+    if (quiz[0]) slides.splice(Math.min(2, slides.length), 0, { k: "🤔 Errate die Pointe", quiz: quizRow(quiz[0]), t: quiz[0].setup, m: "Auflösung gleich …" });
     if (battle) slides.push({ k: "🥊 Pointen-Battle von heute", t: battle.setup + (best ? "\n" + best.text : "\n… und deine Pointe?"), m: best ? "Führt gerade: @" + best.author : "Schreib die beste Pointe!" });
-    slides.push({ k: "Mach mit!", t: "Bewerte die Witze von heute und entscheide, wer Witz des Tages wird.", m: "lachwerk.github.io", qr: true });
+    if (opt && opt.live === "1") slides.push({ live: true });
+    else slides.push({ k: "Mach mit!", t: "Bewerte die Witze von heute und entscheide, wer Witz des Tages wird.", m: "lachwerk.github.io", qr: true });
     TV.slides = slides;
   }
   // Größe, Seitenverhältnis und Drehung der Bildschirm-Fläche berechnen
@@ -1351,34 +1694,107 @@
     const style = fixed ? `width:${w}px;height:${h}px;left:${(W - w) / 2}px;top:${(H - h) / 2}px;--vh:${h / 100}px;--vw:${w / 100}px;` + (rot ? `transform:rotate(${rot === "r" ? -90 : 90}deg);` : "") : "";
     return { fmt, fixed, style };
   }
+  const tvBrandHtml = () => (TV.brand ? `<span class="tv-brand">${TV.brand.logo ? `<img src="${TV.brand.logo}" alt="">` : ""}<span>präsentiert von <b>${esc(TV.brand.name)}</b></span></span>` : "");
+  function tvFrame(inner, extraCls) {
+    const box = tvBox(TV.opt), theme = tvTheme(TV.opt);
+    if (theme) document.body.style.setProperty("--tv-page", TV.opt.bg || "#ffc928"); else document.body.style.removeProperty("--tv-page");
+    $("#main").innerHTML = `<div class="tv ${box.fmt}${box.fixed ? " fix" : ""}${extraCls || ""}" style="${theme};${box.style}" title="Tippen für Vollbild">${inner}</div>`;
+  }
+  const tvDots = () => { const real = TV.slides.filter((x) => !x.live); return real.length > 1 ? `<div class="tv-dots">${real.map((x) => `<i${x === TV.slides[TV.i % TV.slides.length] ? ' class="on"' : ""}></i>`).join("")}</div>` : ""; };
   function drawTv() {
     const s = TV.slides[TV.i % TV.slides.length]; if (!s) return;
-    const len = s.t.length, size = len > 160 ? "s" : len > 90 ? "m" : "l", box = tvBox(TV.opt), theme = tvTheme(TV.opt);
-    if (theme) document.body.style.setProperty("--tv-page", TV.opt.bg || "#ffc928"); else document.body.style.removeProperty("--tv-page");
-    $("#main").innerHTML = `<div class="tv ${box.fmt}${box.fixed ? " fix" : ""}" style="${theme};${box.style}" title="Tippen für Vollbild">
-      <div class="tv-top"><span class="logo">Lach<span>werk</span></span><span class="tv-k">${esc(s.k)}</span></div>
-      <p class="tv-t tv-${s.qr ? "m" : size}">${esc(s.t)}</p>
-      <div class="tv-bot"><div class="tv-left"><span class="tv-m">${esc(s.m)}</span>${TV.brand ? `<span class="tv-brand">${TV.brand.logo ? `<img src="${TV.brand.logo}" alt="">` : ""}<span>präsentiert von <b>${esc(TV.brand.name)}</b></span></span>` : ""}</div>
-        <div class="tv-qr"><img src="qr.svg" alt="QR-Code zu lachwerk.github.io"><span>Jetzt mitbewerten</span></div></div>
-      <div class="tv-dots">${TV.slides.map((_, i) => `<i${i === TV.i % TV.slides.length ? ' class="on"' : ""}></i>`).join("")}</div>
-    </div>`;
+    if (s.live) { drawLiveTv(); return; }
+    const len = s.t.length, size = len > 160 ? "s" : len > 90 ? "m" : "l";
+    const quiz = s.quiz ? `<div class="tv-quiz">${s.quiz.options.map((o, i) => `<span class="${i + 1 === s.quiz.correct ? "ok" : "no"}"><b>${"ABC"[i]}</b>${esc(o)}</span>`).join("")}</div>` : "";
+    tvFrame(`<div class="tv-top"><span class="logo">Lach<span>werk</span></span><span class="tv-k">${esc(s.k)}</span></div>
+      <div class="tv-mid${s.quiz ? " has-quiz" : ""}"><p class="tv-t tv-${s.qr || s.quiz ? "m" : size}">${esc(s.t)}</p>${quiz}</div>
+      <div class="tv-bot"><div class="tv-left"><span class="tv-m">${esc(s.quiz && TV.revealed ? `Witz von @${s.quiz.author}` : s.m)}</span>${tvBrandHtml()}</div>
+        <div class="tv-qr"><img src="qr.svg" alt="QR-Code zu lachwerk.github.io"><span>${s.quiz ? "Mehr Quiz: QR scannen" : "Jetzt mitbewerten"}</span></div></div>
+      ${tvDots()}`, s.quiz && TV.revealed ? " reveal" : "");
   }
-  window.addEventListener("resize", () => { if (TV.timer) drawTv(); });
+  // Ablauf: jede Folie bekommt ihre Zeit, Quiz-Folien etwas mehr, Live-Duelle laufen bis zum Rundenende
+  function tvShow() {
+    clearTimeout(TV.timer); clearInterval(TV.poll); clearInterval(TV.clock); clearTimeout(TV.reveal);
+    if (!TV.active) return;
+    const s = TV.slides[TV.i % TV.slides.length]; if (!s) return;
+    TV.revealed = false; TV.live = null;
+    if (s.live) { tvLive(); return; }
+    drawTv();
+    let ms = TV.opt.sec * 1000;
+    if (s.quiz) { ms = Math.round(ms * 1.7); TV.reveal = setTimeout(() => { TV.revealed = true; drawTv(); }, Math.round(ms * 0.6)); }
+    TV.timer = setTimeout(() => { TV.i++; tvShow(); }, ms);
+  }
+  const liveUrl = () => baseUrl() + "l/" + TV.code;
+  async function tvLive() {
+    const gen = ++TV.gen;
+    if (TV.opt.preview || !LIVE || !TV.code) {   // Vorschau: Beispielrunde ohne Datenbank
+      const pool = await API.ranking("week", null, 6, 0).catch(() => []);
+      if (gen !== TV.gen) return;
+      const [a, b] = pool;
+      TV.live = { id: 0, a_text: a ? a.text : "Witz A", b_text: b ? b.text : "Witz B", a_votes: 7, b_votes: 5, ends_at: new Date(Date.now() + 45000).toISOString(), finished: false };
+      TV.skew = 0; drawLiveTv();
+      TV.clock = setInterval(updateLiveTv, 1000);
+      TV.timer = setTimeout(() => { TV.i++; tvShow(); }, TV.slides.length > 1 ? TV.opt.sec * 1000 : 3600000);
+      return;
+    }
+    const get = (start) => rpc("live_round", { p_screen: TV.code, p_device: DEVICE, p_start: start, p_cats: TV.opt.cats.length ? TV.opt.cats : null }).then((x) => x[0] || null);
+    const norm = (r) => (r ? { ...r, a_votes: Number(r.a_votes), b_votes: Number(r.b_votes) } : r);
+    let r = null; try { r = norm(await get(true)); } catch (e) { r = null; }
+    if (gen !== TV.gen) return;
+    if (!r) { TV.timer = setTimeout(() => { TV.i++; tvShow(); }, TV.slides.length > 1 ? 1000 : 15000); return; }
+    TV.live = r; TV.skew = Date.now() - new Date(r.server_now).getTime(); TV.liveDone = false;
+    drawLiveTv();
+    const finish = () => {
+      if (TV.liveDone) return; TV.liveDone = true;
+      clearInterval(TV.poll); clearInterval(TV.clock); TV.live.finished = true; drawLiveTv();
+      TV.timer = setTimeout(() => { TV.i++; tvShow(); }, 9000);
+    };
+    if (r.finished) { finish(); return; }
+    TV.clock = setInterval(() => { updateLiveTv(); if (lvLeftTv() <= 0) setTimeout(async () => { try { const x = norm(await get(false)); if (gen === TV.gen && x && x.id === TV.live.id) TV.live = x; } catch (e) { /* letzter Stand */ } if (gen === TV.gen) finish(); }, 1200); }, 1000);
+    TV.poll = setInterval(async () => {
+      try { const x = norm(await get(false)); if (gen !== TV.gen || !x || x.id !== TV.live.id) return; TV.live = x; if (x.finished) finish(); else updateLiveTv(); } catch (e) { /* nächster Versuch */ }
+    }, 2500);
+  }
+  const lvLeftTv = () => (TV.live ? Math.max(0, Math.ceil((new Date(TV.live.ends_at).getTime() - (Date.now() - (TV.skew || 0))) / 1000)) : 0);
+  function drawLiveTv() {
+    const r = TV.live; if (!r) return;
+    const n = r.a_votes + r.b_votes, pa = n ? Math.round((r.a_votes / n) * 100) : 50, pb = n ? 100 - pa : 50;
+    const win = r.finished ? (r.a_votes > r.b_votes ? 1 : r.b_votes > r.a_votes ? 2 : 0) : 0;
+    const size = (t) => (t.length > 150 ? "s" : t.length > 80 ? "m" : "l");
+    const card = (k, t, p) => `<div class="lv-c${win === k ? " win" : ""}${win && win !== k ? " lose" : ""}"><b class="lv-ab">${win === k ? "🏆" : "AB"[k - 1]}</b><p class="lv-t lv-${size(t)}">${esc(t)}</p>
+      <div class="lv-bar"><i id="tvBar${k}" style="width:${n ? p : 0}%"></i></div><span class="lv-p" id="tvPct${k}">${n ? p + " %" : "–"}</span></div>`;
+    const info = r.finished ? (win ? `${"AB"[win - 1]} gewinnt mit ${win === 1 ? pa : pb} %!` : n ? "Unentschieden!" : "Keine Stimmen. Nächste Runde gleich!") : `Noch ${lvLeftTv()} s · ${fmt(n)} ${n === 1 ? "Stimme" : "Stimmen"}`;
+    if (!TV.qrCode || TV.qrFor !== TV.code) { TV.qrCode = TV.code ? qrSvg(liveUrl()) : ""; TV.qrFor = TV.code; }
+    tvFrame(`<div class="tv-top"><span class="logo">Lach<span>werk</span></span><span class="tv-k">⚡ Live-Duell · Welcher ist lustiger?</span></div>
+      <div class="lv-pair">${card(1, r.a_text, pa)}${card(2, r.b_text, pb)}</div>
+      <div class="tv-bot"><div class="tv-left"><span class="tv-m lv-info" id="tvLvInfo">${esc(info)}</span>${tvBrandHtml()}</div>
+        <div class="tv-qr">${TV.qrCode ? `<div class="tv-qrbox">${TV.qrCode}</div>` : `<img src="qr.svg" alt="">`}<span>Handy zücken &amp; abstimmen</span></div></div>`, " tv-live");
+  }
+  function updateLiveTv() {
+    const r = TV.live; if (!r || r.finished) return;
+    const n = r.a_votes + r.b_votes, pa = n ? Math.round((r.a_votes / n) * 100) : 0, pb = n ? 100 - pa : 0;
+    [[1, pa], [2, pb]].forEach(([k, p]) => { const b = document.getElementById("tvBar" + k), t = document.getElementById("tvPct" + k); if (b) b.style.width = p + "%"; if (t) t.textContent = n ? p + " %" : "–"; });
+    const i = document.getElementById("tvLvInfo"); if (i) i.textContent = `Noch ${lvLeftTv()} s · ${fmt(n)} ${n === 1 ? "Stimme" : "Stimmen"}`;
+  }
+  window.addEventListener("resize", () => { if (TV.active) { if (TV.live) drawLiveTv(); else drawTv(); } });
   async function renderTv(token, r) {
     stopTv();
     $("#main").innerHTML = '<p class="loading">Lade Bildschirm-Modus …</p>';
-    let opt = r;
+    let opt = r; TV.code = null;
     if (r.code) {   // Kurzlink: Einstellungen aus der Datenbank holen
       const cfg = LIVE ? await rpc("get_tv_screen", { p_code: r.code }).catch(() => null) : null;
       if (stale(token)) return;
       if (!cfg) { $("#main").innerHTML = `<div class="view"><p class="empty">Den Bildschirm-Code „${esc(r.code)}“ gibt es nicht.<br><a class="btn" href="#/bildschirm" style="margin-top:12px">Neuen Bildschirm-Link erstellen</a></p></div>`; document.body.classList.remove("tv-mode"); return; }
-      opt = tvOpts(new URLSearchParams(cfg));
+      opt = tvOpts(new URLSearchParams(cfg)); TV.code = r.code;
+    } else if (opt.live && LIVE && !opt.preview) {
+      // Live-Duell braucht einen Bildschirm-Code: gleiche Einstellungen ergeben denselben Code
+      TV.code = await rpc("save_tv_screen", { p_config: r.raw || {} }).catch(() => null);
+      if (stale(token)) return;
     }
     TV.opt = opt;
     await loadTv(opt);
     if (stale(token)) return;
-    TV.i = 0; drawTv();
-    TV.timer = setInterval(() => { TV.i++; drawTv(); }, opt.sec * 1000);
+    TV.i = 0; TV.active = true; tvShow();
     TV.refresh = setInterval(() => loadTv(opt).catch(() => {}), 10 * 60000);
   }
 
@@ -1391,12 +1807,13 @@
     out.f = c.f; if (c.f === "hoch" && c.dreh) out.dreh = c.dreh;
     if (c.bg !== "ffc928" || c.ac !== "15172a" || c.card !== "ffffff") { out.bg = c.bg; out.ac = c.ac; out.card = c.card; }
     if (c.k.length) out.k = c.k.join(","); if (c.n) out.n = c.n.slice(0, 40); if (c.s) out.s = String(c.s); if (c.t !== 12) out.t = String(c.t);
+    if (c.live) out.live = c.live; if (c.g) out.g = c.g;
     return out;
   }
   const tvUrl = (cfg) => location.origin + location.pathname + "#/tv" + (Object.keys(cfg).length ? "?" + new URLSearchParams(cfg).toString() : "");
   async function renderScreen(token, r) {
     const q = r.q, o = tvOpts(q);
-    SCR.cfg = { f: o.format || "quer", dreh: o.rot || "", bg: (o.bg || "#ffc928").slice(1), ac: (o.ac || "#15172a").slice(1), card: (o.card || "#ffffff").slice(1), k: o.cats, n: o.name, s: o.sponsor, t: o.sec };
+    SCR.cfg = { f: o.format || "quer", dreh: o.rot || "", bg: (o.bg || "#ffc928").slice(1), ac: (o.ac || "#15172a").slice(1), card: (o.card || "#ffffff").slice(1), k: o.cats, n: o.name, s: o.sponsor, t: o.sec, live: o.live || "", g: o.group || "" };
     const c = SCR.cfg, sp = c.s && LIVE ? await API.sponsor(c.s).catch(() => null) : null;
     if (stale(token)) return;
     const color = (id, label, v) => `<label class="scr-color">${label}<span><input type="color" id="${id}C" value="#${v}"><input type="text" id="${id}" value="#${v}" maxlength="7" spellcheck="false" autocomplete="off" inputmode="text"></span></label>`;
@@ -1422,6 +1839,13 @@
           ${sp ? `<p class="small">Mit Branding von Sponsor <b>${esc(sp.name)}</b>${sp.logo ? ` <img class="sp-mini" src="${sp.logo}" alt="">` : ""}.</p>` : ""}
           <div class="scr-sec"><b>Nur bestimmte Kategorien (optional)</b>
             <div class="chips static">${Object.entries(CATS).map(([k, l]) => `<label class="chip-check"><input type="checkbox" class="scrCat" value="${k}" ${c.k.includes(k) ? "checked" : ""}> ${l}</label>`).join("")}</div></div>
+          <label>⚡ Live-Duell<select id="scrLive">
+            <option value="">Aus</option>
+            <option value="1" ${c.live === "1" ? "selected" : ""}>Im Wechsel mit den Witzen</option>
+            <option value="2" ${c.live === "2" ? "selected" : ""}>Nur Live-Duell</option></select>
+            <small class="muted">Zwei Witze treten gegeneinander an. Zuschauer scannen den QR-Code und stimmen per Handy ab, die Balken wachsen live. Ideal für Wartebereiche.</small></label>
+          <label>👥 Gruppe (optional)<input type="text" id="scrGroup" maxlength="6" value="${esc(c.g)}" placeholder="Einladungscode, z. B. K7P2QX" autocomplete="off" spellcheck="false" autocapitalize="characters">
+            <small class="muted">Zeigt zusätzlich die besten Witze und das witzigste Mitglied eurer <a href="#/gruppen">Gruppe</a>.</small></label>
           <label>Wechsel alle<select id="scrT">${[8, 12, 15, 20, 30].map((t) => `<option value="${t}" ${c.t === t ? "selected" : ""}>${t} Sekunden</option>`).join("")}</select></label>
         </section>
         <section class="scr-side">
@@ -1445,6 +1869,7 @@
     for (const [id, key] of [["scrBg", "bg"], ["scrAc", "ac"], ["scrCard", "card"]]) { const v = hex(id); if (v) { c[key] = v; $("#" + id + "C").value = "#" + v; } }
     c.k = [...document.querySelectorAll(".scrCat:checked")].map((x) => x.value);
     c.n = $("#scrName").value.trim(); c.t = Number($("#scrT").value) || 12;
+    c.live = $("#scrLive").value; c.g = $("#scrGroup").value.replace(/[^0-9a-z]/gi, "").slice(0, 6).toUpperCase();
   }
   function updateScreen(now) {
     if (!$("#scrUrl")) return;
@@ -1457,7 +1882,7 @@
     const w = contrast("#" + c.ac, "#" + c.bg) < 3 ? "Akzent und Hintergrund sind sich sehr ähnlich, das Logo und die Rubrik sind dann schlecht lesbar. Die Witze selbst bleiben lesbar." : "";
     $("#scrWarn").textContent = w; $("#scrWarn").hidden = !w;
     // Vorschau ohne Drehung, damit man das Ergebnis aufrecht sieht
-    const prev = { ...cfg }; delete prev.dreh;
+    const prev = { ...cfg, vorschau: "1" }; delete prev.dreh;
     clearTimeout(SCR.timer);
     SCR.timer = setTimeout(() => { const f = $("#scrFrame"); if (f) f.src = tvUrl(prev); }, now ? 0 : 500);
   }
@@ -1571,7 +1996,7 @@
     S.adminHead = head;
     if (v === "uebersicht") { $("#main").innerHTML = `<div class="view">${head}${adminOverviewHtml(...extra)}</div>`; return; }
     if (v === "witze") { S.adminRowsPrev = S.adminRows; drawAdminJokes(); return; }
-    if (v === "nutzer") { $("#main").innerHTML = `<div class="view">${head}${adminUsersHtml(extra)}</div>`; return; }
+    if (v === "nutzer") { $("#main").innerHTML = `<div class="view">${head}${adminUsersHtml(extra)}${await adminGroupsHtml()}</div>`; return; }
     if (v === "settings") { $("#main").innerHTML = `<div class="view">${head}${adminSettingsHtml(...extra)}</div>`; return; }
     if (v === "sponsoren") { S.adminSponsors = extra; $("#main").innerHTML = `<div class="view">${head}${adminSponsorsHtml(extra)}</div>`; return; }
     if (v === "stats") { $("#main").innerHTML = `<div class="view">${head}${adminStatsHtml(...extra)}</div>`; return; }
@@ -1925,6 +2350,25 @@
     if ("scrPre" in d) { const [bg, ac, card] = d.scrPre.split(","); $("#scrBg").value = "#" + bg; $("#scrAc").value = "#" + ac; $("#scrCard").value = "#" + card; updateScreen(); return; }
     if ("scrCopy" in d) { const u = $("#scrUrl").value; navigator.clipboard ? navigator.clipboard.writeText(u).then(() => toast("Link kopiert."), () => { $("#scrUrl").select(); }) : $("#scrUrl").select(); return; }
     if ("scrShort" in d) { screenShortLink(); return; }
+    if (d.quizOpt) { quizAnswer(Number(d.quizOpt)); return; }
+    if ("quizNext" in d) { quizNext(); return; }
+    if ("quizShare" in d) { quizShare(); return; }
+    if (d.liveVote) { liveVote(Number(d.liveVote)); return; }
+    if (d.grouprange) { S.groupRange = d.grouprange; render(); return; }
+    if ("groupLogin" in d) { openAuth("signup", "Mit Konto kannst du Gruppen gründen und beitreten.", () => render()); return; }
+    if (d.groupJoin) { groupJoin(d.groupJoin); return; }
+    if (d.groupCopy) { navigator.clipboard ? navigator.clipboard.writeText(d.groupCopy).then(() => toast("Link kopiert."), () => {}) : toast(d.groupCopy); return; }
+    if ("groupQr" in d) { const q = $("#groupQr"); if (q) q.hidden = !q.hidden; return; }
+    if (d.groupLeave) { groupAction("leave_group", { p_code: d.groupLeave }, "Du hast die Gruppe verlassen."); return; }
+    if (d.groupDelete) {
+      if (t.dataset.armed !== "1") { t.dataset.armed = "1"; t.textContent = "Wirklich löschen? Nochmal tippen"; setTimeout(() => { if (t.isConnected) { t.dataset.armed = ""; t.textContent = "Gruppe löschen"; } }, 4000); return; }
+      groupAction("manage_group", { p_code: d.groupDelete, p_action: "delete" }, "Gruppe gelöscht.", () => { location.hash = "#/gruppen"; }); return;
+    }
+    if (d.adminGroupDel) {
+      if (t.dataset.armed !== "1") { t.dataset.armed = "1"; t.textContent = "Wirklich?"; return; }
+      groupAction("admin_delete_group", { p_key: AK(), p_code: d.adminGroupDel }, "Gruppe gelöscht."); return;
+    }
+    if ("postOpen" in d) { openPost(false); return; }
     if ("spLogoClear" in d) { S.spLogo = ""; $("#spLogoPrev").innerHTML = ""; return; }
     if ("annClear" in d) { API.adminSetAnnouncement(S.adminKey, "").then(() => { S.announcement = null; toast("Ankündigung entfernt."); render(); }).catch((err) => toast(errorText(err))); return; }
     if ("punchLogin" in d) { openAuth("login", "Zum Mitmachen beim Pointen-Battle brauchst du ein Konto. Abstimmen geht auch ohne.", "battle"); return; }
@@ -2024,11 +2468,12 @@
       if (authMode === "login") {
         await AUTH_API.signIn(email, pw);
         closeSheets(); toast(`Hallo @${AUTH.username}!`); render();
+        if (typeof afterLogin === "function") afterLogin();
         if (afterLogin === "battle") location.hash = "#/battle";
         if (afterLogin === "post" || afterLogin === "challenge") openPost(afterLogin === "challenge");
       } else if (authMode === "signup") {
         const r = await AUTH_API.signUp(name, email, pw);
-        if (r.confirmed) { closeSheets(); toast(`Willkommen, @${AUTH.username}!`); render(); if (afterLogin === "battle") location.hash = "#/battle"; if (afterLogin === "post" || afterLogin === "challenge") openPost(afterLogin === "challenge"); }
+        if (r.confirmed) { closeSheets(); toast(`Willkommen, @${AUTH.username}!`); render(); if (typeof afterLogin === "function") afterLogin(); if (afterLogin === "battle") location.hash = "#/battle"; if (afterLogin === "post" || afterLogin === "challenge") openPost(afterLogin === "challenge"); }
         else { $("#authFields").hidden = true; $("#authOk").hidden = false; $("#authOk").textContent = `Fast geschafft: Wir haben dir eine E-Mail an ${email} geschickt. Klick auf den Link darin, dann bist du angemeldet. Schau auch im Spam-Ordner nach.`; }
       } else {
         await AUTH_API.recover(email);
@@ -2105,6 +2550,22 @@
     } finally { btn.textContent = "Veröffentlichen"; btn.disabled = !$("#dupBox").hidden; }
   });
   document.addEventListener("submit", async (e) => {
+    if (e.target.id === "groupCreate" || e.target.id === "groupJoin") {
+      e.preventDefault();
+      const create = e.target.id === "groupCreate", err = $(create ? "#groupCreateErr" : "#groupJoinErr"), btn = e.target.querySelector("button");
+      err.textContent = ""; btn.disabled = true;
+      try {
+        if (create) { const code = await rpc("create_group", { p_name: $("#groupName").value }); toast("Gruppe gegründet! Jetzt Leute einladen."); location.hash = "#/gruppe/" + code; }
+        else { const code = $("#groupCode").value.replace(/[^0-9a-z]/gi, "").toUpperCase(); const name = await rpc("join_group", { p_code: code }); toast(`Willkommen in „${name}“!`); location.hash = "#/gruppe/" + code; }
+      } catch (ex) { err.textContent = errorText(ex); btn.disabled = false; }
+      return;
+    }
+    if (e.target.dataset && e.target.dataset.groupManage) {
+      e.preventDefault();
+      const code = route().code, act = e.target.dataset.groupManage, v = e.target.querySelector("input").value;
+      groupAction("manage_group", { p_code: code, p_action: act, p_value: v }, act === "rename" ? "Name geändert." : "Mitglied entfernt.");
+      return;
+    }
     if (e.target.id === "bulkForm") {
       e.preventDefault();
       const bodies = $("#bulkText").value.split(/\n\s*\n/).map((x) => x.trim()).filter(Boolean);
@@ -2198,6 +2659,11 @@
     if (e.key === "Escape") { closeSheets(); return; }
     if (document.querySelector(".scrim:not([hidden])")) return;
     if (e.target.closest && e.target.closest("input, textarea, select")) return;
+    if (route().view === "quiz") {
+      if (["1", "2", "3"].includes(e.key) && document.querySelector(`[data-quiz-opt="${e.key}"]:not([disabled])`)) { e.preventDefault(); quizAnswer(Number(e.key)); }
+      else if ((e.key === "Enter" || e.key === "ArrowRight") && document.querySelector("[data-quiz-next]")) { e.preventDefault(); quizNext(); }
+      return;
+    }
     if (route().view === "duel") {
       const cards = document.querySelectorAll(".duel-card");
       if ((e.key === "1" || e.key === "2") && cards.length === 2) { e.preventDefault(); const w = cards[Number(e.key) - 1]; duelPick(Number(w.dataset.duel), Number(w.dataset.other)); }
