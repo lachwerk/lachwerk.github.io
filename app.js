@@ -315,6 +315,8 @@
     async sponsor(id) { return (await rpc("get_sponsor", { p_id: id }))[0] || null; },
     async sponsorClick(id) { await rpc("sponsor_click", { p_id: id }); },
     async adminGroups(key) { return rpc("admin_groups", { p_key: key }); },
+    async adminVisits(key, days) { return rpc("admin_visits", { p_key: key, p_days: days }); },
+    async adminVisitBreakdown(key, days) { return rpc("admin_visit_breakdown", { p_key: key, p_days: days }); },
     async contact() { return rpc("get_contact", {}); },
     async adminSponsors(key) { return rpc("admin_sponsors", { p_key: key }); },
     async adminSaveSponsor(key, x) { return rpc("admin_save_sponsor", { p_key: key, p_id: x.id || null, p_name: x.name, p_claim: x.claim, p_url: x.url, p_logo: x.logo, p_placement: x.placement, p_starts: x.starts, p_ends: x.ends }); },
@@ -662,6 +664,7 @@
     if (r.cat && CATS[r.cat] && S.cat !== r.cat) { S.cat = r.cat; S.rows = []; renderChips(); }
     renderNav(r.view);
     syncPushUser();
+    trackView(r);
     try {
       if (r.view === "list") await renderList(token);
       else if (r.view === "swipe") await renderSwipe(token);
@@ -899,7 +902,7 @@
   }
 
   /* ───────── Witz-Seite & Teilen ───────── */
-  const shareUrl = (id) => location.href.split("#")[0] + "#/witz/" + id;
+  const shareUrl = (id) => location.origin + location.pathname + "#/witz/" + id;
   async function renderDetail(token, id) {
     $("#main").innerHTML = '<p class="loading">Lade Witz …</p>';
     const j = await API.joke(id);
@@ -915,7 +918,7 @@
     j.label = crown ? "Witz des Tages · " + fmtDay(crown.day) : null;
     j.sponsor = crown && S.sponsors.daily ? S.sponsors.daily.name : null;
     const url = shareUrl(j.id);
-    const wa = "https://wa.me/?text=" + encodeURIComponent(j.text + "\n\nMehr davon: " + url);
+    const wa = "https://wa.me/?text=" + encodeURIComponent(j.text + "\n\nMehr davon: " + url.replace("#", "?s=wa#"));
     $("#main").innerHTML = `<div class="view">
       <div><a class="link" href="#/" style="font-size:.88rem">← Zur Bestenliste</a></div>
       ${crown ? `<div class="crown-badge">👑 Witz des Tages am ${fmtDay(crown.day)}</div>${sponsorHtml("daily")}` : ""}
@@ -1972,6 +1975,37 @@
     if (btn) btn.disabled = false;
   }
 
+
+  /* ───────── Anonyme Besucherzählung (ohne Cookies, ohne Geräte-Kennung) ───────── */
+  // Gezählt wird nur „Bereich X wurde aufgerufen“ plus grobe Herkunft und Gerätetyp. Eindeutige Besucher
+  // erkennt der Server über einen täglich wechselnden Hash; im Browser wird dafür nichts gespeichert.
+  const VISIT = (() => {
+    let src = "direkt";
+    try {
+      const q = new URLSearchParams(location.search), ref = document.referrer ? new URL(document.referrer).hostname : "";
+      if (q.has("qr")) src = "qr";
+      else if (q.get("s") === "wa" || /whatsapp|wa\.me/.test(ref)) src = "whatsapp";
+      else if (/google\./.test(ref)) src = "google";
+      else if (/facebook\.|fb\./.test(ref)) src = "facebook";
+      else if (/instagram\./.test(ref)) src = "instagram";
+      else if (ref && ref !== location.hostname) src = "andere";
+      // Herkunfts-Merkmal aus der Adresse entfernen, damit es beim Teilen nicht weitergegeben wird
+      if (q.has("qr") || q.has("s")) { q.delete("qr"); q.delete("s"); history.replaceState(null, "", location.pathname + (q.toString() ? "?" + q : "") + location.hash); }
+    } catch (e) { /* egal */ }
+    const ua = navigator.userAgent || "";
+    const device = /iPad|Tablet|PlayBook|Silk/i.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) ? "tablet" : /Mobi|Android|iPhone|iPod/i.test(ua) ? "mobil" : "computer";
+    const off = navigator.globalPrivacyControl === true || navigator.doNotTrack === "1";
+    return { src, device, off, last: null };
+  })();
+  function trackView(r) {
+    if (!LIVE || VISIT.off || r.view === "admin" || r.preview || (r.view === "tv" && /vorschau=1/.test(location.hash))) return;
+    const key = r.view === "list" ? "list:" + (S.range === "new" ? "new" : "") : location.hash.split("?")[0];
+    if (key === VISIT.last) return;
+    VISIT.last = key;
+    const route = r.view === "list" && S.range === "new" ? "new" : r.view;
+    rpc("track_view", { p_route: route, p_source: VISIT.src, p_device: VISIT.device }).catch(() => {});
+  }
+
   /* ───────── Push-Nachrichten ───────── */
   const PUSH_OK = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
   const FN_URL = LIVE ? CFG.supabaseUrl.replace(/\/$/, "") + "/functions/v1/push" : null;
@@ -2167,7 +2201,8 @@
       else if (v === "nutzer") extra = await API.adminUsers(S.adminKey, S.adminUserQ);
       else if (v === "settings") extra = await Promise.all([API.adminOverview(S.adminKey), API.contact().catch(() => null)]);
       else if (v === "sponsoren") extra = await API.adminSponsors(S.adminKey);
-      else if (v === "stats") extra = await Promise.all([API.adminTotals(S.adminKey), API.adminStats(S.adminKey, 14), API.adminCatStats(S.adminKey), API.adminTop(S.adminKey).catch(() => [])]);
+      else if (v === "stats") extra = await Promise.all([API.adminTotals(S.adminKey), API.adminStats(S.adminKey, 14), API.adminCatStats(S.adminKey), API.adminTop(S.adminKey).catch(() => []),
+        API.adminVisits ? API.adminVisits(AK(), 14).catch(() => []) : [], API.adminVisitBreakdown ? API.adminVisitBreakdown(AK(), 7).catch(() => []) : []]);
       else if (v === "vorrat") extra = await Promise.all([API.adminTotals(S.adminKey), API.adminCatStats(S.adminKey)]);
       else if (v === "challenge") extra = await loadChallenge(true);
       else if (v === "battle") extra = await API.adminBattle(S.adminKey);
@@ -2187,7 +2222,7 @@
     if (v === "nutzer") { $("#main").innerHTML = `<div class="view">${head}${adminUsersHtml(extra)}${await adminGroupsHtml()}</div>`; return; }
     if (v === "settings") { $("#main").innerHTML = `<div class="view">${head}${adminSettingsHtml(...extra)}</div>`; return; }
     if (v === "sponsoren") { S.adminSponsors = extra; $("#main").innerHTML = `<div class="view">${head}${adminSponsorsHtml(extra)}</div>`; return; }
-    if (v === "stats") { $("#main").innerHTML = `<div class="view">${head}${adminStatsHtml(...extra)}</div>`; return; }
+    if (v === "stats") { $("#main").innerHTML = `<div class="view">${head}${adminVisitsHtml(extra[4], extra[5])}${adminStatsHtml(...extra.slice(0, 4))}</div>`; return; }
     if (v === "vorrat") { $("#main").innerHTML = `<div class="view">${head}${adminQueueHtml(...extra)}</div>`; return; }
     if (v === "challenge") { $("#main").innerHTML = `<div class="view">${head}${adminChallengeHtml(extra)}</div>`; return; }
     if (v === "battle") { $("#main").innerHTML = `<div class="view">${head}${adminBattleHtml(extra)}</div>`; return; }
@@ -2208,6 +2243,28 @@
     </div>`;
   }
 
+
+  const VISIT_LABELS = { list: "Bestenliste", new: "Neu", swipe: "Bewerten", duel: "Duell", highlights: "Highlights", authors: "Autoren", detail: "Einzelne Witze",
+    profile: "Profile", groups: "Gruppen-Übersicht", group: "Gruppen", search: "Suche", screen: "Bildschirm-Gestalter", tv: "Bildschirm-Modus", live: "Live-Duell (Handy)",
+    challenge: "Challenge", andere: "Sonstiges", direkt: "Direkt / unbekannt", whatsapp: "WhatsApp", google: "Google", qr: "QR-Code", facebook: "Facebook",
+    instagram: "Instagram", mobil: "Handy", tablet: "Tablet", computer: "Computer" };
+  function adminVisitsHtml(days, parts) {
+    if (!days || !days.length) return "";
+    const max = Math.max(1, ...days.map((d) => d.uniques)), today = days[days.length - 1], week = days.slice(-7);
+    const sum = (a, k) => a.reduce((s, d) => s + d[k], 0);
+    const list = (kind, title) => {
+      const rows = (parts || []).filter((p) => p.kind === kind && p.views > 0), tot = rows.reduce((s, p) => s + p.views, 0) || 1;
+      return `<div><h3>${title}</h3>${rows.length ? `<ul class="visit-list">${rows.map((p) => `<li><span>${esc(VISIT_LABELS[p.label] || p.label)}</span><i style="width:${Math.round((p.views / tot) * 100)}%"></i><b>${fmt(p.views)}</b></li>`).join("")}</ul>` : '<p class="muted small">Noch keine Daten.</p>'}</div>`;
+    };
+    return `<section class="panel"><h2>Alle Besucher (anonym)</h2>
+      <div class="stats">${[[today.uniques, "Besucher heute"], [today.views, "Aufrufe heute"], [sum(week, "uniques"), "Besucher 7 Tage"], [sum(week, "views"), "Aufrufe 7 Tage"]].map(([n, l]) => `<div><b>${fmt(n)}</b><span>${l}</span></div>`).join("")}</div>
+      <table class="tbl"><thead><tr><th>Tag</th><th>Besucher</th><th></th><th>Aufrufe</th></tr></thead><tbody>
+      ${days.slice().reverse().map((d) => `<tr><td>${fmtShort(d.day)}</td><td>${fmt(d.uniques)}</td><td class="bar"><i style="width:${Math.round((d.uniques / max) * 100)}%"></i></td><td>${fmt(d.views)}</td></tr>`).join("")}
+      </tbody></table>
+      <div class="visit-grid">${list("route", "Beliebteste Bereiche (Aufrufe, 7 Tage)")}${list("source", "Herkunft (Besucher, 7 Tage)")}${list("device", "Geräte (Besucher, 7 Tage)")}</div>
+      <p class="muted small">Ohne Cookies und ohne Geräte-Kennung: Besucher werden pro Tag über einen täglich wechselnden, nicht umkehrbaren Code gezählt. Wer „Do Not Track“ bzw. Global Privacy Control eingeschaltet hat, wird nicht gezählt, ebenso Suchmaschinen-Bots. Daher sind die Zahlen eher etwas zu niedrig.</p>
+    </section>`;
+  }
   function adminStatsHtml(t, days, cats, top) {
     const max = Math.max(1, ...days.map((d) => d.votes + d.reactions + d.duels));
     const tile = (n, l) => `<div><b>${n}</b><span>${l}</span></div>`;

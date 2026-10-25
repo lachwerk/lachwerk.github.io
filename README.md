@@ -165,6 +165,7 @@ erweiterung8.sql  Errate die Pointe, Live-Duell am Bildschirm, Gruppen und Ligen
 erweiterung9.sql  Bestenliste „Neu“ (letzte 6 Stunden, neueste zuerst)
 erweiterung10.sql Battle-Push-Zeitplan entfernen (Battle abgeschaltet)
 erweiterung11.sql Witze-Suche, Erfolgs-Nachrichten für Autoren (Top 3, Likes; dazu Edge Function „push“ neu deployen)
+erweiterung12.sql anonyme Besucherzählung ohne Cookies (Admin → Statistik)
 
 Pointen-Battle und „Errate die Pointe“ sind seit Oktober 2026 abgeschaltet (nicht im Menü, Links führen zur Startseite, keine Battle-Push-Nachrichten). Code und Tabellen sind noch vorhanden und könnten wieder eingeschaltet werden.
 partner.html      Angebotsseite für Unternehmen

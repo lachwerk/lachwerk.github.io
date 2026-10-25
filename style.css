@@ -549,6 +549,15 @@ body.tv-mode { background: var(--yellow); min-height: 100vh; }
 body.tv-mode .season-side { display: none; }
 @media (prefers-reduced-motion: reduce) { .season-badge { animation: none; } }
 
+/* ───────── Besucherstatistik (Admin) ───────── */
+.visit-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-top: 6px; }
+.visit-grid h3 { margin: 0 0 6px; font-size: .9rem; }
+.visit-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; }
+.visit-list li { display: grid; grid-template-columns: minmax(0, 1fr) 80px auto; gap: 8px; align-items: center; font-size: .85rem; }
+.visit-list li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.visit-list li i { display: block; height: 8px; border-radius: 99px; background: var(--ink); min-width: 2px; }
+.visit-list li b { font: 700 .8rem var(--f-mono); }
+
 @media (prefers-reduced-motion: reduce) { .duel-card { transition: none; } }
 @media (prefers-reduced-motion: reduce) { .swipe-card { transition: none; } .btn:active, .who:active, .round:active, .fab:active { transform: none; } }
 

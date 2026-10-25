@@ -11,7 +11,7 @@
     (function () {
       var p = location.pathname, m;
       if ((m = p.match(/\/tv\/([0-9a-z]{4,8})\/?$/i))) location.replace("/#/tv/" + m[1].toUpperCase());
-      else if ((m = p.match(/\/l\/([0-9a-z]{4,8})\/?$/i))) location.replace("/#/live/" + m[1].toUpperCase());
+      else if ((m = p.match(/\/l\/([0-9a-z]{4,8})\/?$/i))) location.replace("/?qr#/live/" + m[1].toUpperCase());
       else if ((m = p.match(/\/g\/([0-9a-z]{4,8})\/?$/i))) location.replace("/#/gruppe/" + m[1].toUpperCase());
     })();
   </script>
