@@ -390,7 +390,7 @@ body.tv-mode { padding: 0; overflow: hidden; }
 .tv.hoch .tv-top { flex-direction: column; align-items: flex-start; gap: calc(2 * var(--vh)); } .tv.hoch .tv-k { text-align: left; padding: calc(.8 * var(--vh)) calc(3 * var(--vw)); }
 .tv.hoch .tv-bot .tv-m { font-size: calc(2.2 * var(--vh)); } .tv.hoch .tv-qr img { width: calc(12 * var(--vh)); height: calc(12 * var(--vh)); }
 .tv.fix { inset: auto; transform-origin: center; }
-body.tv-mode { background: var(--tv-page, var(--yellow)); }
+body.tv-mode { background: var(--yellow); min-height: 100vh; }
 
 /* ───────── Bildschirm-Link gestalten ───────── */
 .scr { gap: 16px; }

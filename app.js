@@ -594,7 +594,7 @@
   async function render() {
     const r = route(), token = ++renderToken;
     document.body.classList.toggle("tv-mode", r.view === "tv");
-    if (r.view !== "tv") { stopTv(); document.body.style.removeProperty("--tv-page"); }
+    if (r.view !== "tv") { stopTv(); document.body.style.background = document.documentElement.style.background = ""; }
     if (r.view !== "live") stopLive();
     if (r.cat && CATS[r.cat] && S.cat !== r.cat) { S.cat = r.cat; S.rows = []; renderChips(); }
     renderNav(r.view);
@@ -1697,7 +1697,9 @@
   const tvBrandHtml = () => (TV.brand ? `<span class="tv-brand">${TV.brand.logo ? `<img src="${TV.brand.logo}" alt="">` : ""}<span>präsentiert von <b>${esc(TV.brand.name)}</b></span></span>` : "");
   function tvFrame(inner, extraCls) {
     const box = tvBox(TV.opt), theme = tvTheme(TV.opt);
-    if (theme) document.body.style.setProperty("--tv-page", TV.opt.bg || "#ffc928"); else document.body.style.removeProperty("--tv-page");
+    // Rand außerhalb der Bildschirm-Fläche in der Hintergrundfarbe (statt Lachwerk-Gelb)
+    const page = theme ? TV.opt.bg || "#ffc928" : "";
+    document.body.style.background = document.documentElement.style.background = page;
     $("#main").innerHTML = `<div class="tv ${box.fmt}${box.fixed ? " fix" : ""}${extraCls || ""}" style="${theme};${box.style}" title="Tippen für Vollbild">${inner}</div>`;
   }
   const tvDots = () => { const real = TV.slides.filter((x) => !x.live); return real.length > 1 ? `<div class="tv-dots">${real.map((x) => `<i${x === TV.slides[TV.i % TV.slides.length] ? ' class="on"' : ""}></i>`).join("")}</div>` : ""; };

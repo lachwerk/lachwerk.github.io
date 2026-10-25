@@ -1,8 +1,8 @@
 // Lachwerk – Service Worker: macht die Seite installierbar und zeigt sie auch ohne Netz an.
 // Strategie: immer zuerst das Netz (damit Updates sofort ankommen), bei Funkloch der Zwischenspeicher.
 // Anfragen an Supabase (andere Adresse) werden nie zwischengespeichert.
-const CACHE = "lachwerk-v20";
-const SHELL = ["./", "index.html", "style.css?v=20", "app.js?v=20", "config.js", "favicon.svg", "icons/icon-192.png", "manifest.webmanifest", "qr.svg"];
+const CACHE = "lachwerk-v21";
+const SHELL = ["./", "index.html", "style.css?v=21", "app.js?v=21", "config.js", "favicon.svg", "icons/icon-192.png", "manifest.webmanifest", "qr.svg"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
