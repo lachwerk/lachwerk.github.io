@@ -2067,8 +2067,8 @@
     return `<section class="gcard" id="gcard" hidden aria-label="Grußkarte">
       <h2>Als Grußkarte verschicken</h2>
       <div class="chips static">${OCCASIONS.map(([k, e, t]) => `<button class="chip" data-card-occ="${k}" aria-pressed="${GC.occ === k}">${e} ${esc(t.replace(/^Alles Gute zum /, "").replace(/^Schönen |^Schönes |^Guten /, ""))}</button>`).join("")}</div>
-      <div class="gcard-in"><label>Für<input type="text" id="gcTo" maxlength="24" value="${esc(GC.to)}" placeholder="z. B. Anna" autocomplete="off"></label>
-        <label>Von<input type="text" id="gcFrom" maxlength="24" value="${esc(GC.from)}" placeholder="z. B. Marvin" autocomplete="off"></label></div>
+      <div class="gcard-in"><label>Für<input type="text" id="gcTo" maxlength="24" value="${esc(GC.to)}" placeholder="z. B. Sönke" autocomplete="off"></label>
+        <label>Von<input type="text" id="gcFrom" maxlength="24" value="${esc(GC.from)}" placeholder="z. B. Hans" autocomplete="off"></label></div>
       <canvas id="gcCanvas" aria-label="Vorschau der Grußkarte"></canvas>
       <div class="row"><button class="btn" data-card-share>Karte verschicken</button><button class="btn ghost" data-card-close>Schließen</button></div>
       <p class="muted small" id="gcMsg" role="status"></p>
