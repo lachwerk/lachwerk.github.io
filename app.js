@@ -2343,7 +2343,7 @@
   function adminSettingsHtml(o, contact) {
     return `<form class="panel form" id="contactForm">
         <h2>Kontakt-E-Mail für Firmen</h2>
-        <p class="muted small">Wird auf der Seite <a href="partner.html" target="_blank" rel="noopener">„Für Unternehmen“</a> als Anfrage-Knopf angezeigt. Leer lassen, um den Knopf auszublenden.</p>
+        <p class="muted small">Wird auf der (derzeit ausgeblendeten) Seite „Für Unternehmen“ als Anfrage-Knopf angezeigt. Leer lassen, um den Knopf auszublenden.</p>
         <input type="email" id="contactEmail" value="${esc(contact || "")}" placeholder="z. B. hallo@lachwerk.de">
         <p class="err" id="contactErr"></p>
         <div><button class="btn">Speichern</button></div>

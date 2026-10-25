@@ -119,7 +119,7 @@ Der Admin-Bereich (`#/admin`, ab Erweiterung 3) hat diese Reiter:
 2. Im Supabase-Dashboard unter **Edge Functions → Deploy a new function → Via Editor** eine Funktion namens `push` anlegen, den Inhalt von `supabase/functions/push/index.ts` einfügen und deployen. In den Einstellungen der Funktion **„Verify JWT with legacy secret“ / „Enforce JWT verification“ ausschalten**.
 3. Fertig: Die Funktion erzeugt ihre Schlüssel beim ersten Aufruf selbst. Nutzer schalten Benachrichtigungen unter Highlights ein (Witz des Tages um 20 Uhr, Battle mittags, eigener Witz gekrönt). Auf dem iPhone nur in der installierten App (ab iOS 16.4).
 
-`partner.html` ist die Angebotsseite „Lachwerk für Unternehmen“ (Bildschirme und Sponsoring). Die Kontakt-E-Mail dafür steht im Admin-Bereich unter „Einstellungen“.
+Die Angebotsseite „Lachwerk für Unternehmen“ ist vorerst ausgeblendet: Das Original liegt in `_partner.html` (Dateien mit Unterstrich veröffentlicht GitHub Pages nicht), `partner.html` leitet zur Startseite weiter. Zum Wiedereinschalten `_partner.html` zurück nach `partner.html` umbenennen und den Footer-Link ergänzen.
 
 Seite mit `#/admin` am Ende aufrufen, z. B. `https://lach-werk.de/#/admin`, und den Admin-Schlüssel eingeben.
 Dort siehst du gemeldete und ausgeblendete Witze und kannst sie **freigeben** oder **entfernen**.
