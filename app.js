@@ -564,11 +564,11 @@
     if (h === "highlights") return { view: "highlights" };
     if (h === "autoren") return { view: "authors" };
     if (h === "challenge") return { view: "challenge" };
-    if (h === "battle") return { view: "battle" };
+    if (h === "battle") return { view: "list" };   // Pointen-Battle ist abgeschaltet
     if (h === "tv" || h.startsWith("tv?")) { const q = new URLSearchParams(h.slice(3)); return { view: "tv", ...tvOpts(q), raw: Object.fromEntries(q) }; }
     if (h.startsWith("tv/")) return { view: "tv", code: h.slice(3).replace(/[^0-9a-z]/gi, "").slice(0, 8).toUpperCase() };
     if (h === "bildschirm" || h.startsWith("bildschirm?")) return { view: "screen", q: new URLSearchParams(h.slice(11)) };
-    if (h === "quiz" || h.startsWith("quiz?")) return { view: "quiz", mode: h.includes("endlos") ? "endless" : null };
+    if (h === "quiz" || h.startsWith("quiz?")) return { view: "list" };   // Quiz ist abgeschaltet
     if (h.startsWith("live/")) return { view: "live", code: h.slice(5).replace(/[^0-9a-z]/gi, "").slice(0, 8).toUpperCase() };
     if (h === "gruppen") return { view: "groups" };
     if (h.startsWith("gruppe/")) return { view: "group", code: h.slice(7).replace(/[^0-9a-z]/gi, "").slice(0, 8).toUpperCase() };
@@ -578,7 +578,7 @@
     return { view: "list" };
   }
   function renderNav(view) {
-    const items = [["#/", "list", "Bestenliste"], ["#/bewerten", "swipe", "Bewerten"], ["#/duell", "duel", "Duell"], ["#/battle", "battle", "Battle"], ["#/quiz", "quiz", "Quiz"], ["#/highlights", "highlights", "Highlights"], ["#/autoren", "authors", "Autoren"]];
+    const items = [["#/", "list", "Bestenliste"], ["#/bewerten", "swipe", "Bewerten"], ["#/duell", "duel", "Duell"], ["#/highlights", "highlights", "Highlights"], ["#/autoren", "authors", "Autoren"]];
     if (S.adminKey || view === "admin" || isRoleAdmin()) items.push(["#/admin", "admin", "Moderation"]);
     $("#nav").innerHTML = items.map(([href, v, l]) => `<a href="${href}" ${view === v ? 'aria-current="page"' : ""}>${l}</a>`).join("");
     $("#listControls").style.display = view === "list" ? "grid" : "none";
@@ -721,7 +721,7 @@
   let warmed = false;
   function warmUp() {
     if (warmed) return; warmed = true;
-    const go = () => { fillDuel(); if (!battleCache) fetchBattle().catch(() => {}); };
+    const go = () => { fillDuel(); };
     if (window.requestIdleCallback) requestIdleCallback(go, { timeout: 3000 }); else setTimeout(go, 1500);
   }
 
@@ -1036,7 +1036,7 @@
     const [daily, authors, champs, lol, sigh, dead, battle, seasons] = await Promise.all([
       safe(API.daily(7), []), safe(API.authors("week"), []), safe(API.duelRanking(3), []),
       safe(API.reactionTop("lol", 1), []), safe(API.reactionTop("sigh", 1), []), safe(API.reactionTop("dead", 1), []),
-      safe(API.battleToday(), null), safe(API.seasonWinners(), []), loadChallenge(), loadSponsors(),
+      Promise.resolve(null), safe(API.seasonWinners(), []), loadChallenge(), loadSponsors(),
     ]);
     if (stale(token)) return;
     S.daily = daily;
@@ -1170,7 +1170,6 @@
     ["Lachmaschine", "500 Likes insgesamt", (p) => p.up_count >= 500],
     ["Challenge-Sieger", "Eine Wochen-Challenge gewonnen", (p) => p.challenge_wins >= 1],
     ["Witzbold des Monats", "Eine Monats-Saison gewonnen", (p) => p.season_wins >= 1],
-    ["Pointen-Schmied", "10 Pointen im Battle eingereicht", (p) => p.punchlines >= 10],
   ];
   async function renderProfile(token, name) {
     $("#main").innerHTML = '<p class="loading">Lade Profil …</p>';
@@ -1514,7 +1513,7 @@
       $("#main").innerHTML = `<div class="view live"><section class="panel live-wait"><span class="live-k">⚡ Live-Duell</span><h1>Gleich geht's los</h1>
         <p class="muted">Schau auf den Bildschirm: Sobald dort das nächste Duell startet, kannst du hier abstimmen. Diese Seite aktualisiert sich von selbst.</p>
         <p class="loading">Warte auf die nächste Runde …</p></section>
-        <p class="small muted on-y">Zwischendurch: <a href="#/quiz">Errate die Pointe</a> · <a href="#/">Bestenliste</a></p></div>`;
+        <p class="small muted on-y">Zwischendurch: <a href="#/">Bestenliste</a> · <a href="#/duell">Duell</a></p></div>`;
       return;
     }
     const [pa, pb] = lvPct(r), voted = !!r.my_choice, show = voted || r.finished, win = r.finished ? (r.a_votes > r.b_votes ? 1 : r.b_votes > r.a_votes ? 2 : 0) : 0;
@@ -1659,9 +1658,9 @@
   async function loadTv(opt) {
     const safe = (p, d) => p.catch(() => d);
     const cats = (opt && opt.cats) || [], grp = opt && opt.group && LIVE ? opt.group : null;
-    const [daily, todayAll, battle, brand, quiz, group, gJokes, gMembers] = await Promise.all([safe(API.daily(1), []), safe(API.ranking("day", null, cats.length ? 60 : 6, 0), []), safe(API.battleToday(), null),
+    const [daily, todayAll, battle, brand, quiz, group, gJokes, gMembers] = await Promise.all([safe(API.daily(1), []), safe(API.ranking("day", null, cats.length ? 60 : 6, 0), []), null,
       opt && opt.sponsor ? safe(API.sponsor(opt.sponsor), null) : opt && opt.name ? null : loadSponsors().then((x) => x.tv || null),
-      LIVE ? safe(rpc("get_quiz", { p_daily: false, p_n: 2, p_cats: cats.length ? cats : null }), []) : [],
+      [],
       grp ? safe(rpc("get_group", { p_code: grp }).then((x) => x[0] || null), null) : null,
       grp ? safe(rpc("group_ranking", { p_device: DEVICE, p_code: grp, p_range: "week", p_limit: 5 }).then((x) => x.map(fromRow)), []) : [],
       grp ? safe(rpc("group_members_ranking", { p_code: grp, p_range: "month" }), []) : []]);
@@ -1821,7 +1820,7 @@
     if (stale(token)) return;
     const color = (id, label, v) => `<label class="scr-color">${label}<span><input type="color" id="${id}C" value="#${v}"><input type="text" id="${id}" value="#${v}" maxlength="7" spellcheck="false" autocomplete="off" inputmode="text"></span></label>`;
     $("#main").innerHTML = `<div class="view scr">
-      <div><h1>Bildschirm-Link</h1><p class="muted">Lachwerk für Fernseher, Stelen und Tablets: Witz des Tages, die besten Witze von heute und das Pointen-Battle im Wechsel, mit QR-Code zum Mitmachen. Einmal gestalten, Link am Bildschirm öffnen, fertig. Er aktualisiert sich von selbst.</p></div>
+      <div><h1>Bildschirm-Link</h1><p class="muted">Lachwerk für Fernseher, Stelen und Tablets: Witz des Tages und die besten Witze von heute im Wechsel, auf Wunsch mit Live-Duell, und mit QR-Code zum Mitmachen. Einmal gestalten, Link am Bildschirm öffnen, fertig. Er aktualisiert sich von selbst.</p></div>
       <div class="scr-grid">
         <section class="panel form scr-form">
           <fieldset class="scr-fmt"><legend>Format</legend>
@@ -1905,7 +1904,7 @@
   /* ───────── Push-Nachrichten ───────── */
   const PUSH_OK = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
   const FN_URL = LIVE ? CFG.supabaseUrl.replace(/\/$/, "") + "/functions/v1/push" : null;
-  const PUSH_TOPICS = [["daily", "👑 Witz des Tages (jeden Abend um 20 Uhr)"], ["battle", "🥊 Neues Pointen-Battle (mittags)"], ["mine", "🏆 Wenn mein eigener Witz gekrönt wird"]];
+  const PUSH_TOPICS = [["daily", "👑 Witz des Tages (jeden Abend um 20 Uhr)"], ["mine", "🏆 Wenn mein eigener Witz gekrönt wird"]];
   function b64u(s) { const p = "=".repeat((4 - (s.length % 4)) % 4); const b = atob((s + p).replace(/-/g, "+").replace(/_/g, "/")); return Uint8Array.from(b, (c) => c.charCodeAt(0)); }
   const callFn = (body) => fetch(FN_URL, { method: "POST", headers: { "Content-Type": "application/json", apikey: CFG.supabaseAnonKey }, body: JSON.stringify(body) }).then((r) => r.json());
   async function pushSub() { if (!PUSH_OK || !LIVE) return null; const reg = await navigator.serviceWorker.ready; return reg.pushManager.getSubscription(); }
@@ -1994,7 +1993,7 @@
     const label = { visible: "Sichtbar", hidden: "Ausgeblendet", removed: "Entfernt" };
     const head = `<div class="row" style="justify-content:space-between;align-items:center"><h1>Moderation</h1>${S.adminKey ? '<button class="link" data-admin-logout>Abmelden</button>' : `<span class="muted small on-y">als Admin @${esc(AUTH.username)}</span>`}</div>
       <div class="tabs admin-tabs" role="tablist">
-        ${[["uebersicht", "Übersicht"], ["gemeldet", "Zu prüfen"], ["witze", "Witze"], ["nutzer", "Nutzer"], ["stats", "Statistik"], ["vorrat", "Vorrat"], ["challenge", "Challenge"], ["battle", "Battle"], ["filter", "Wortfilter"], ["sponsoren", "Sponsoren"], ["settings", "Einstellungen"]].map(([k, l]) => `<button role="tab" data-adminview="${k}" aria-selected="${v === k}">${l}</button>`).join("")}
+        ${[["uebersicht", "Übersicht"], ["gemeldet", "Zu prüfen"], ["witze", "Witze"], ["nutzer", "Nutzer"], ["stats", "Statistik"], ["vorrat", "Vorrat"], ["challenge", "Challenge"], ["filter", "Wortfilter"], ["sponsoren", "Sponsoren"], ["settings", "Einstellungen"]].map(([k, l]) => `<button role="tab" data-adminview="${k}" aria-selected="${v === k}">${l}</button>`).join("")}
       </div>`;
     S.adminHead = head;
     if (v === "uebersicht") { $("#main").innerHTML = `<div class="view">${head}${adminOverviewHtml(...extra)}</div>`; return; }
@@ -2079,7 +2078,7 @@
         <div><button class="btn">Speichern</button></div>
       </form>`;
   }
-  const KPI = [["visitors", "Besucher"], ["votes", "Stimmen"], ["reactions", "Reaktionen"], ["duels", "Duelle"], ["jokes", "Neue Witze"], ["punchlines", "Pointen"], ["signups", "Registrierungen"], ["reports", "Meldungen"]];
+  const KPI = [["visitors", "Besucher"], ["votes", "Stimmen"], ["reactions", "Reaktionen"], ["duels", "Duelle"], ["jokes", "Neue Witze"], ["signups", "Registrierungen"], ["reports", "Meldungen"]];
   function adminOverviewHtml(o, act, push, punchReports) {
     const delta = (a, b) => { const d = a - b; return d === 0 ? '<span class="delta">±0</span>' : `<span class="delta ${d > 0 ? "up" : "down"}">${d > 0 ? "▲" : "▼"} ${Math.abs(d)}</span>`; };
     const days = o.queue_until ? Math.floor((new Date(o.queue_until) - Date.now()) / 864e5) : 0;
@@ -2091,7 +2090,7 @@
         <p class="muted small">Besucher = verschiedene Geräte, die heute abgestimmt, reagiert oder ein Duell entschieden haben.</p></section>
       <div class="status-grid">
         <button class="status${warn(o.open_reports > 0)}" data-adminview="gemeldet"><b>${o.open_reports}</b><span>${o.open_reports === 1 ? "Witz" : "Witze"} zu prüfen</span></button>
-        ${punchReports ? `<button class="status warn" data-adminview="battle"><b>${punchReports}</b><span>${punchReports === 1 ? "Pointe" : "Pointen"} gemeldet</span></button>` : ""}
+        ${false && punchReports ? `<button class="status warn" data-adminview="battle"><b>${punchReports}</b><span>${punchReports === 1 ? "Pointe" : "Pointen"} gemeldet</span></button>` : ""}
         <button class="status" data-adminview="nutzer"><b>${fmt(o.users)}</b><span>Konten${o.banned ? ` · ${o.banned} gesperrt` : ""}</span></button>
         <button class="status${warn(days < 7)}" data-adminview="vorrat"><b>${fmt(o.queued)}</b><span>im Vorrat${o.queue_until ? ` · reicht ${days} ${days === 1 ? "Tag" : "Tage"}` : " · leer"}</span></button>
         <button class="status${warn(o.battle_pool < 5)}" data-adminview="battle"><b>${o.battle_pool}</b><span>Battle-Anfänge übrig</span></button>
@@ -2101,7 +2100,6 @@
         <ul class="facts">
           <li><b>👑 Witz des Tages</b>${o.crown ? `<a href="#/witz/${o.crown.id}">${esc(o.crown.body.split("\n")[0].slice(0, 80))}</a><span>@${esc(o.crown.author)} · ${fmtDay(o.crown.day)}</span>` : "<span>Noch keiner gekrönt.</span>"}</li>
           <li><b>🏋️ Challenge</b>${o.challenge ? `<a href="#/challenge">${esc(o.challenge.title)}</a><span>${o.challenge.entries} Beiträge · ${until(o.challenge.ends_at)}</span>` : '<span>Keine aktiv. <button class="link" data-adminview="challenge">Neue anlegen</button></span>'}</li>
-          <li><b>🥊 Battle</b>${o.battle ? `<a href="#/battle">${esc(o.battle.setup)}</a><span>${o.battle.entries} Pointen</span>` : "<span>Heute keins. Vorrat leer?</span>"}</li>
           <li><b>📣 Ankündigung</b>${o.announcement ? `<span>${esc(o.announcement)}</span>` : '<span>Keine. <button class="link" data-adminview="settings">Eine anlegen</button></span>'}</li>
         </ul></section>
       <section class="panel"><h2>Letzte Aktivitäten</h2>
@@ -2197,7 +2195,7 @@
     } catch (e) { toast(errorText(e)); }
     finally { btn.disabled = false; btn.textContent = label; }
   }
-  const PLACES = { daily: "Witz des Tages (inkl. Story-Bild)", battle: "Pointen-Battle", challenge: "Wochen-Challenge", list: "Bestenliste (Startseite)", tv: "Bildschirm-Modus" };
+  const PLACES = { daily: "Witz des Tages (inkl. Story-Bild)", challenge: "Wochen-Challenge", list: "Bestenliste (Startseite)", tv: "Bildschirm-Modus" };
   function adminSponsorsHtml(list) {
     const e = S.editSponsor || {};
     S.spLogo = e.logo || "";

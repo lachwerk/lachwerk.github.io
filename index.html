@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-title" content="Lachwerk">
   <link rel="canonical" href="https://lachwerk.github.io/">
   <link rel="preconnect" href="https://yssqvkhmglwdxvjurxag.supabase.co" crossorigin>
-  <link rel="stylesheet" href="style.css?v=22">
+  <link rel="stylesheet" href="style.css?v=23">
   <!-- Vorschau beim Teilen (WhatsApp, Telegram …) -->
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://lachwerk.github.io/">
@@ -119,7 +119,7 @@
     <form class="sheet" id="deleteForm" novalidate>
       <h2>Konto löschen?</h2>
       <p class="muted small">Dein Konto, dein Benutzername und deine Benachrichtigungen werden endgültig gelöscht. Das lässt sich nicht rückgängig machen.</p>
-      <label class="check"><input type="checkbox" id="delContent"> <span>Auch alle meine Witze und Pointen löschen. Sonst bleiben sie als „Gelöschtes Konto“ erhalten.</span></label>
+      <label class="check"><input type="checkbox" id="delContent"> <span>Auch alle meine Witze löschen. Sonst bleiben sie als „Gelöschtes Konto“ erhalten.</span></label>
       <label><span id="delHint">Zur Bestätigung gib deinen Benutzernamen ein</span><input type="text" id="delName" autocomplete="off"></label>
       <p class="err" id="delErr"></p>
       <div class="row end"><button type="button" class="btn ghost" data-close>Abbrechen</button><button class="btn danger">Endgültig löschen</button></div>
@@ -138,6 +138,6 @@
 
   <script src="config.js"></script>
   <script>/* Startwitze nur im Demo-Modus laden */ if (!(window.LACHWERK_CONFIG || {}).supabaseUrl) document.write('<script src="startwitze.js"><\/script>');</script>
-    <script src="app.js?v=22"></script>
+    <script src="app.js?v=23"></script>
 </body>
 </html>

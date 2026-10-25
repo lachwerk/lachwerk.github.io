@@ -159,6 +159,9 @@ erweiterung6.sql  Konto selbst löschen, Pointen melden
 erweiterung7.sql  Kurzlinks für Bildschirme (lachwerk.github.io/tv/CODE)
 erweiterung8.sql  Errate die Pointe, Live-Duell am Bildschirm, Gruppen und Ligen
 erweiterung9.sql  Bestenliste „Neu“ (letzte 6 Stunden, neueste zuerst)
+erweiterung10.sql Battle-Push-Zeitplan entfernen (Battle abgeschaltet)
+
+Pointen-Battle und „Errate die Pointe“ sind seit Oktober 2026 abgeschaltet (nicht im Menü, Links führen zur Startseite, keine Battle-Push-Nachrichten). Code und Tabellen sind noch vorhanden und könnten wieder eingeschaltet werden.
 partner.html      Angebotsseite für Unternehmen
 plakat.html, qr.svg  Plakat mit QR-Code
 manifest.webmanifest, sw.js, icons/   installierbare App
