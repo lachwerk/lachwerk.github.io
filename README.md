@@ -158,6 +158,7 @@ erweiterung5.sql  Push-Nachrichten (dazu supabase/functions/push/index.ts)
 erweiterung6.sql  Konto selbst löschen, Pointen melden
 erweiterung7.sql  Kurzlinks für Bildschirme (lachwerk.github.io/tv/CODE)
 erweiterung8.sql  Errate die Pointe, Live-Duell am Bildschirm, Gruppen und Ligen
+erweiterung9.sql  Bestenliste „Neu“ (letzte 6 Stunden, neueste zuerst)
 partner.html      Angebotsseite für Unternehmen
 plakat.html, qr.svg  Plakat mit QR-Code
 manifest.webmanifest, sw.js, icons/   installierbare App

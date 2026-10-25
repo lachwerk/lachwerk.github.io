@@ -9,6 +9,7 @@
   const LIVE = Boolean(CFG.supabaseUrl && CFG.supabaseAnonKey);
   const CATS = { flachwitze: "Flachwitze", wortspiele: "Wortspiele", tiere: "Tiere", schule: "Schule", buero: "Büro", nerd: "Nerd", schwarz: "Schwarzer Humor", einzeiler: "Einzeiler" };
   const RANGES = {
+    new: { label: "Newcomer: neue Witze der letzten 6 Stunden, neueste zuerst", best: "Ganz frisch" },
     day: { label: "Beste Witze der letzten 24 Stunden", best: "Tages&shy;bester" },
     week: { label: "Beste Witze der letzten 7 Tage", best: "Wochen&shy;bester" },
     all: { label: "Beste Witze aller Zeiten (ab 20 Stimmen)", best: "Rekord" },
@@ -320,9 +321,9 @@
     const wait = (v) => new Promise((r) => setTimeout(() => r(v), 60));
     return {
       ranking(range, cat, limit, offset) {
-        const h = range === "day" ? 24 : range === "week" ? 168 : Infinity;
+        const h = range === "new" ? 6 : range === "day" ? 24 : range === "week" ? 168 : Infinity;
         return wait(all().filter((j) => visible(j) && ageH(j) < h && (!cat || j.cat === cat) && (range !== "all" || j.up + j.down >= 20))
-          .sort((a, b) => b.score - a.score || b.up + b.down - (a.up + a.down)).slice(offset, offset + limit));
+          .sort((a, b) => (range === "new" ? new Date(b.created) - new Date(a.created) : 0) || b.score - a.score || b.up + b.down - (a.up + a.down)).slice(offset, offset + limit));
       },
       joke(id) { return wait(all().find((j) => j.id === id && visible(j)) || null); },
       unrated(exclude) {
@@ -708,11 +709,11 @@
       ${fallbackNote}
       <div class="meta-row"><span>${r.label}</span><span>${S.rows.length === 1 ? "1 Witz" : S.rows.length + (S.hasMore ? "+" : "") + " Witze"}</span></div>
       ${S.rows.length ? `<ol class="list">${S.rows.map((j, i) => cardHtml(j, i + 1, i === 0 ? r.best : "")).join("")}</ol>`
-        : `<p class="empty">${S.range === "all" ? "Noch hat kein Witz 20 Stimmen. Hilf mit und bewerte neue Witze!" : "Hier gibt es noch keine Witze. Poste den ersten!"}</p>`}
+        : `<p class="empty">${S.range === "all" ? "Noch hat kein Witz 20 Stimmen. Hilf mit und bewerte neue Witze!" : S.range === "new" ? "In den letzten 6 Stunden wurde noch kein Witz gepostet. Sei der Erste!" : "Hier gibt es noch keine Witze. Poste den ersten!"}</p>`}
       ${S.hasMore ? '<button class="btn ghost more" data-more>Weitere Witze</button>' : ""}
       <section class="how"><h2>So funktioniert das Ranking</h2>
         <p>Sortiert wird nach dem Wilson-Score: der vorsichtigen Schätzung, wie viel Prozent aller Leser den Witz mögen. Ein Witz mit 4 von 4 Likes landet deshalb hinter einem mit 180 von 200.</p>
-        <p>„Heute“ zeigt Witze der letzten 24 Stunden, „Woche“ der letzten 7 Tage. Für „Alltime“ braucht ein Witz mindestens 20 Stimmen.</p></section>
+        <p>„Neu“ zeigt die Newcomer der letzten 6 Stunden, die neuesten zuerst, damit frische Witze schnell Stimmen bekommen. „Heute“ zeigt Witze der letzten 24 Stunden, „Woche“ der letzten 7 Tage. Für „Alltime“ braucht ein Witz mindestens 20 Stimmen.</p></section>
     </div>`;
   }
 

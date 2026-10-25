@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-title" content="Lachwerk">
   <link rel="canonical" href="https://lachwerk.github.io/">
   <link rel="preconnect" href="https://yssqvkhmglwdxvjurxag.supabase.co" crossorigin>
-  <link rel="stylesheet" href="style.css?v=21">
+  <link rel="stylesheet" href="style.css?v=22">
   <!-- Vorschau beim Teilen (WhatsApp, Telegram …) -->
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://lachwerk.github.io/">
@@ -31,6 +31,7 @@
       <nav class="nav" id="nav" aria-label="Hauptnavigation"></nav>
       <div id="listControls" style="display:grid;gap:10px">
         <div class="tabs" role="tablist" aria-label="Zeitraum">
+          <button role="tab" data-range="new" aria-selected="false">Neu</button>
           <button role="tab" data-range="day" aria-selected="true">Heute</button>
           <button role="tab" data-range="week" aria-selected="false">Woche</button>
           <button role="tab" data-range="all" aria-selected="false">Alltime</button>
@@ -137,6 +138,6 @@
 
   <script src="config.js"></script>
   <script>/* Startwitze nur im Demo-Modus laden */ if (!(window.LACHWERK_CONFIG || {}).supabaseUrl) document.write('<script src="startwitze.js"><\/script>');</script>
-    <script src="app.js?v=21"></script>
+    <script src="app.js?v=22"></script>
 </body>
 </html>
