@@ -172,15 +172,16 @@ plakat.html, qr.svg  Plakat mit QR-Code
 manifest.webmanifest, sw.js, icons/   installierbare App
 witze/            statische Kategorie-Seiten für Google
 sitemap.xml, robots.txt
-impressum.html    Vorlage, bitte ausfüllen
-datenschutz.html  Vorlage, bitte ausfüllen
+impressum.html    Impressum (inkl. DSA-Kontaktstelle)
+datenschutz.html  Datenschutzerklärung
+nutzungsbedingungen.html  Regeln, Rechte an Witzen, Moderation (DSA)
 og-image.png      Vorschaubild beim Teilen
 favicon.svg       Icon
 ```
 
 ## Vor dem Veröffentlichen
 
-- [ ] `impressum.html` und `datenschutz.html` ausfüllen (für eine öffentliche Seite in Deutschland Pflicht)
+- [x] `impressum.html`, `datenschutz.html` und `nutzungsbedingungen.html` ausgefüllt (Oktober 2026)
 - [ ] In `index.html` bei `og:image` die volle Adresse eintragen, z. B. `https://lach-werk.de/og-image.png`. Dann zeigt WhatsApp das Vorschaubild.
 - [ ] Startwitze durchsehen. Die Liste steht unten in `supabase.sql` und in `startwitze.js`.
 - [ ] Moderation testen: einen Witz melden und unter `#/admin` freigeben
