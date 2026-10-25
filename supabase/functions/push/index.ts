@@ -4,7 +4,7 @@
 // Aufrufe (POST, JSON):
 //   {"type":"setup"}                 Schlüssel anlegen (falls nötig), öffentlichen Schlüssel zurückgeben
 //   {"type":"daily"}                 Witz des Tages an alle Abos mit Thema „daily“ (ab 20 Uhr, einmal pro Tag)
-//   {"type":"battle"}                Neues Pointen-Battle an Thema „battle“ (ab 12 Uhr, einmal pro Tag)
+//   {"type":"milestones"}            Erfolge eigener Witze (Top 3 von heute, Like-Meilensteine) an Thema „mine“ (8–22 Uhr)
 //   {"type":"test","endpoint":"…"}   Test-Nachricht an genau ein Abo
 // Jeder Versand läuft höchstens einmal pro Tag, wiederholte Aufrufe schaden nicht.
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
@@ -108,16 +108,25 @@ Deno.serve(async (req) => {
       return json({ daily: r1, mine: r2 });
     }
 
-    if (input.type === "battle") {
-      if (hour < 12) return json({ skipped: "vor 12 Uhr" });
-      if ((await getSetting("push_last_battle")) === day) return json({ skipped: "heute schon verschickt" });
-      const { data: b } = await sb.rpc("get_battle_today");
-      const prompt = Array.isArray(b) ? b[0] : b;
-      if (!prompt) return json({ skipped: "heute kein Battle" });
-      await setSetting("push_last_battle", day);
-      const { data: subs } = await sb.from("push_subscriptions").select("endpoint, p256dh, auth, fails").contains("topics", ["battle"]);
-      const r = await sendAll((subs || []) as Sub[], { title: "🥊 Neues Pointen-Battle", body: short(prompt.setup) + " Deine Pointe?", url: SITE + "#/battle" });
-      return json({ battle: r });
+    if (input.type === "milestones") {
+      if (hour < 8 || hour >= 22) return json({ skipped: "Nachtruhe" });
+      const { data: rows, error } = await sb.rpc("take_milestones");
+      if (error) throw error;
+      const list = (rows || []) as { joke_id: number; user_id: string; kind: string; likes: number; body: string }[];
+      if (!list.length) return json({ milestones: 0 });
+      const users = [...new Set(list.map((r) => r.user_id))];
+      const { data: subs } = await sb.from("push_subscriptions").select("endpoint, p256dh, auth, fails, user_id").in("user_id", users).contains("topics", ["mine"]);
+      const all = (subs || []) as (Sub & { user_id: string })[];
+      let sent = 0;
+      for (const r of list) {
+        const mine = all.filter((s) => s.user_id === r.user_id); if (!mine.length) continue;
+        const title = r.kind === "day1" ? "🥇 Dein Witz ist gerade Platz 1 von heute!"
+          : r.kind === "top3" ? "🏆 Dein Witz ist in den Top 3 von heute!"
+          : `🎉 Dein Witz hat ${r.kind.replace("likes", "")} Likes geknackt!`;
+        const res = await sendAll(mine, { title, body: short(r.body.replace(/\n/g, " ")), url: SITE + "#/witz/" + r.joke_id });
+        sent += res.ok;
+      }
+      return json({ milestones: list.length, sent });
     }
 
     return json({ error: "unbekannter type" }, 400);

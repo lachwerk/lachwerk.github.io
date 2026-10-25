@@ -89,6 +89,9 @@ Für eine schon eingerichtete Datenbank einmal `erweiterung.sql` im SQL Editor a
 | Lieblingsthemen | Beim Bewerten und im Duell lassen sich Kategorien wählen (im Browser gespeichert). |
 | Wortfilter | Witze und Pointen mit gesperrten Wörtern werden abgelehnt. Liste unter `#/admin` → Wortfilter, `wort*` sperrt alle Wörter, die so beginnen. |
 | Bildschirm-Modus | `#/bildschirm` öffnet den Gestalter: Querformat 16:9 oder Hochformat 9:16 (auch für gedreht montierte Fernseher), Firmenfarben (Hintergrund, Akzent, Karte), Firmenname, Kategorien und Wechselzeit, mit Live-Vorschau. Ergebnis ist ein Link `#/tv?f=hoch&bg=…&ac=…&card=…&n=…&k=…&t=…` oder ein Kurzlink `lachwerk.github.io/tv/CODE` (Erweiterung 7, `404.html` leitet um). Antippen für Vollbild. |
+| Suche | `#/suche?q=…`: alle Suchwörter müssen vorkommen, sortiert nach Score. Menüpunkt „🔍 Suche“. |
+| Grußkarte | Auf der Witz-Seite „Als Grußkarte“: Anlass (Geburtstag, Montag, Gute Besserung …), Für/Von, Bild 1080×1350 zum Teilen. |
+| Erfolgs-Nachrichten | Push an Autoren (Thema „mine“), wenn ein Witz Platz 1 bzw. Top 3 von heute erreicht oder 10/25/50/100/250/500 Likes knackt. Prüfung alle 15 Minuten, Versand 8–22 Uhr. |
 | Errate die Pointe | `#/quiz`: Tagesquiz mit 5 Witzanfängen (für alle gleich, Ergebnis teilbar, Vergleich mit anderen Spielern) und Endlos-Modus mit Serie. Pointe = letzte Zeile eines Witzes, falsche Antworten sind Pointen anderer Witze. Läuft auch als Folie im Bildschirm-Modus. |
 | Live-Duell | Bildschirm-Option `live=1` (im Wechsel) oder `live=2` (nur Duell): zwei Witze, 45 Sekunden, Zuschauer scannen den QR-Code (`/l/CODE` → `#/live/CODE`) und stimmen per Handy ab, die Balken wachsen live. |
 | Gruppen | `#/gruppen`, `#/gruppe/CODE`, Einladung über `/g/CODE`: eigene Bestenliste (Woche, Monat, Gesamt) und witzigste Mitglieder. Gründer kann umbenennen, Mitglieder entfernen, löschen. Bildschirm-Option `g=CODE`. Admin-Bereich → Nutzer zeigt alle Gruppen. |
@@ -160,6 +163,7 @@ erweiterung7.sql  Kurzlinks für Bildschirme (lachwerk.github.io/tv/CODE)
 erweiterung8.sql  Errate die Pointe, Live-Duell am Bildschirm, Gruppen und Ligen
 erweiterung9.sql  Bestenliste „Neu“ (letzte 6 Stunden, neueste zuerst)
 erweiterung10.sql Battle-Push-Zeitplan entfernen (Battle abgeschaltet)
+erweiterung11.sql Witze-Suche, Erfolgs-Nachrichten für Autoren (Top 3, Likes; dazu Edge Function „push“ neu deployen)
 
 Pointen-Battle und „Errate die Pointe“ sind seit Oktober 2026 abgeschaltet (nicht im Menü, Links führen zur Startseite, keine Battle-Push-Nachrichten). Code und Tabellen sind noch vorhanden und könnten wieder eingeschaltet werden.
 partner.html      Angebotsseite für Unternehmen

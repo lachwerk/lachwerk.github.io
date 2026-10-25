@@ -513,6 +513,24 @@ body.tv-mode { background: var(--yellow); min-height: 100vh; }
 .tv-live .tv-qrbox { width: calc(20 * var(--vh)); height: calc(20 * var(--vh)); }
 .tv.hoch.tv-live .tv-qrbox { width: calc(13 * var(--vh)); height: calc(13 * var(--vh)); }
 
+/* ───────── Suche ───────── */
+.search-bar { display: flex; gap: 8px; }
+.view.search > * { min-width: 0; }
+.search-bar input { flex: 1; min-width: 0; width: 100%; font: inherit; font-size: 1.05rem; color: var(--ink); background: var(--paper); border: 2px solid var(--ink); border-radius: 999px; padding: 12px 18px; box-shadow: var(--slab-sm); }
+.search-bar input:focus { outline: none; box-shadow: 0 0 0 3px var(--ink); }
+.search-tips .chip { font-size: .82rem; }
+
+/* ───────── Grußkarte ───────── */
+.gcard { background: var(--paper); border-radius: var(--r-card); padding: 18px; box-shadow: var(--slab); display: grid; gap: 12px; }
+.gcard[hidden] { display: none; }
+.gcard h2 { margin: 0; }
+.gcard-in { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.gcard-in label { display: grid; gap: 4px; font-weight: 700; font-size: .88rem; }
+.gcard-in input { min-width: 0; }
+.gcard canvas { width: min(100%, 420px); height: auto; justify-self: center; border-radius: 16px; box-shadow: var(--slab-sm); }
+.gcard .chip[aria-pressed="true"] { background: var(--ink); color: var(--yellow); }
+#minePush .install { margin: 0; }
+
 @media (prefers-reduced-motion: reduce) { .duel-card { transition: none; } }
 @media (prefers-reduced-motion: reduce) { .swipe-card { transition: none; } .btn:active, .who:active, .round:active, .fab:active { transform: none; } }
 

@@ -571,6 +571,7 @@
     if (h === "quiz" || h.startsWith("quiz?")) return { view: "list" };   // Quiz ist abgeschaltet
     if (h.startsWith("live/")) return { view: "live", code: h.slice(5).replace(/[^0-9a-z]/gi, "").slice(0, 8).toUpperCase() };
     if (h === "gruppen") return { view: "groups" };
+    if (h === "suche" || h.startsWith("suche?")) { let q = new URLSearchParams(h.slice(6)).get("q") || ""; return { view: "search", q }; }
     if (h.startsWith("gruppe/")) return { view: "group", code: h.slice(7).replace(/[^0-9a-z]/gi, "").slice(0, 8).toUpperCase() };
     if (h.startsWith("kategorie/")) return { view: "list", cat: h.slice(10) };
     if (h.startsWith("u/")) { let n = h.slice(2); try { n = decodeURIComponent(n); } catch (e) { /* roh lassen */ } return { view: "profile", name: n }; }
@@ -578,11 +579,11 @@
     return { view: "list" };
   }
   function renderNav(view) {
-    const items = [["#/", "list", "Bestenliste"], ["#/bewerten", "swipe", "Bewerten"], ["#/duell", "duel", "Duell"], ["#/highlights", "highlights", "Highlights"], ["#/autoren", "authors", "Autoren"]];
+    const items = [["#/", "list", "Bestenliste"], ["#/bewerten", "swipe", "Bewerten"], ["#/duell", "duel", "Duell"], ["#/highlights", "highlights", "Highlights"], ["#/autoren", "authors", "Autoren"], ["#/suche", "search", "🔍 Suche"]];
     if (S.adminKey || view === "admin" || isRoleAdmin()) items.push(["#/admin", "admin", "Moderation"]);
     $("#nav").innerHTML = items.map(([href, v, l]) => `<a href="${href}" ${view === v ? 'aria-current="page"' : ""}>${l}</a>`).join("");
     $("#listControls").style.display = view === "list" ? "grid" : "none";
-    $("#postBtn").hidden = ["swipe", "admin", "duel", "screen", "quiz", "live"].includes(view);
+    $("#postBtn").hidden = ["swipe", "admin", "duel", "screen", "quiz", "live", "search"].includes(view);
     const cur = document.querySelector('.nav [aria-current="page"]'); if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: "nearest", inline: "nearest" });
     $("#who").textContent = AUTH ? "@" + (AUTH.username || "Konto") : "Anmelden";
     $("#who").title = AUTH ? "Dein Konto" : "Anmelden oder registrieren (nur zum Posten nötig)";
@@ -599,6 +600,7 @@
     if (r.view !== "live") stopLive();
     if (r.cat && CATS[r.cat] && S.cat !== r.cat) { S.cat = r.cat; S.rows = []; renderChips(); }
     renderNav(r.view);
+    syncPushUser();
     try {
       if (r.view === "list") await renderList(token);
       else if (r.view === "swipe") await renderSwipe(token);
@@ -614,6 +616,7 @@
       else if (r.view === "quiz") await renderQuiz(token, r.mode);
       else if (r.view === "live") await renderLive(token, r.code);
       else if (r.view === "groups") await renderGroups(token);
+      else if (r.view === "search") await renderSearch(token, r.q);
       else if (r.view === "group") await renderGroup(token, r.code);
       else await renderAdmin(token);
     } catch (e) {
@@ -726,7 +729,9 @@
   }
 
   /* ───────── Abstimmen (sofort anzeigen, bei Fehler zurück) ───────── */
-  function findRow(id) { return S.rows.find((j) => j.id === id) || (S.detail && S.detail.id === id ? S.detail : null); }
+  // Witz in der gerade angezeigten Liste finden (Bestenliste, Suche, Gruppe oder Einzelansicht)
+  const otherList = () => (route().view === "search" ? S.searchRows : route().view === "group" ? S.groupRows : null) || [];
+  function findRow(id) { return S.rows.find((j) => j.id === id) || otherList().find((j) => j.id === id) || (S.detail && S.detail.id === id ? S.detail : null); }
   async function vote(id, value) {
     const j = findRow(id); if (!j || j.own) return;
     const prev = { up: j.up, down: j.down, myVote: j.myVote };
@@ -741,8 +746,8 @@
   function redrawCard(j) {
     const el = document.querySelector(`[data-card="${j.id}"]`); if (!el) return;
     const single = el.classList.contains("single");
-    const rank = single ? null : S.rows.indexOf(j) + 1;
-    el.outerHTML = cardHtml(j, rank, rank === 1 ? RANGES[S.range].best : "");
+    const inList = S.rows.includes(j), rank = single ? null : (inList ? S.rows.indexOf(j) : otherList().indexOf(j)) + 1;
+    el.outerHTML = cardHtml(j, rank, inList && rank === 1 ? RANGES[S.range].best : "");
   }
 
   /* ───────── Swipe-Modus ───────── */
@@ -860,6 +865,7 @@
           <div class="share-buttons">
             <a class="btn wa" href="${wa}" target="_blank" rel="noopener noreferrer">Per WhatsApp schicken</a>
             <button class="btn ghost" data-share-image>Als Bild teilen</button>
+            <button class="btn ghost" data-card-open>Als Grußkarte</button>
             <button class="btn ghost" data-share-link>Link teilen</button>
             ${crown ? '<button class="btn ghost" data-share-channel>Text für WhatsApp-Kanal kopieren</button>' : ""}
             <p class="muted small" id="shareMsg" role="status"></p>
@@ -867,10 +873,13 @@
           <canvas id="storyCanvas" aria-label="Vorschau des Story-Bilds"></canvas>
         </div>
       </section>
+      ${cardBoxHtml()}
+      ${j.own ? '<div id="minePush"></div>' : ""}
       <div class="row"><button class="btn ghost" data-morecat="${j.cat}">Mehr ${CATS[j.cat] || ""}</button><a class="btn ghost" href="#/bewerten">Neue Witze bewerten</a></div>
     </div>`;
     drawStory($("#storyCanvas"), j);
     loadReactions([j]);
+    if (j.own) drawMinePush();
   }
 
   function wrapLines(c, text, maxW) {
@@ -1572,6 +1581,7 @@
       rpc("group_members_ranking", { p_code: code, p_range: range }).catch(() => [])]);
     if (stale(token)) return;
     if (!g) { $("#main").innerHTML = `<div class="view"><p class="empty">Diese Gruppe gibt es nicht (mehr).<br><a class="btn" href="#/gruppen" style="margin-top:12px">Zu den Gruppen</a></p></div>`; return; }
+    S.groupRows = jokes;
     const url = groupUrl(g.code), active = members.filter((m) => m.jokes > 0);
     const title = { week: "Witzbold der Woche", month: "Witzbold des Monats", all: "Allzeit-Bester" }[range];
     const invite = `Mach mit in unserer Witze-Liga „${g.name}“ auf Lachwerk: ${url}`;
@@ -1904,7 +1914,7 @@
   /* ───────── Push-Nachrichten ───────── */
   const PUSH_OK = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
   const FN_URL = LIVE ? CFG.supabaseUrl.replace(/\/$/, "") + "/functions/v1/push" : null;
-  const PUSH_TOPICS = [["daily", "👑 Witz des Tages (jeden Abend um 20 Uhr)"], ["mine", "🏆 Wenn mein eigener Witz gekrönt wird"]];
+  const PUSH_TOPICS = [["daily", "👑 Witz des Tages (jeden Abend um 20 Uhr)"], ["mine", "🏆 Erfolge meiner Witze (Top 3 von heute, Likes, Witz des Tages)"]];
   function b64u(s) { const p = "=".repeat((4 - (s.length % 4)) % 4); const b = atob((s + p).replace(/-/g, "+").replace(/_/g, "/")); return Uint8Array.from(b, (c) => c.charCodeAt(0)); }
   const callFn = (body) => fetch(FN_URL, { method: "POST", headers: { "Content-Type": "application/json", apikey: CFG.supabaseAnonKey }, body: JSON.stringify(body) }).then((r) => r.json());
   async function pushSub() { if (!PUSH_OK || !LIVE) return null; const reg = await navigator.serviceWorker.ready; return reg.pushManager.getSubscription(); }
@@ -1931,7 +1941,7 @@
     box.innerHTML = `<div class="install push">
       <strong>${sub ? "🔔 Benachrichtigungen sind an" : "🔔 Nichts mehr verpassen"}</strong>
       <div class="push-topics">${PUSH_TOPICS.map(([k, l]) => `<label class="check"><input type="checkbox" value="${k}"${topics.includes(k) ? " checked" : ""}> <span>${l}</span></label>`).join("")}</div>
-      ${!AUTH ? '<span class="small">„Mein Witz gekrönt“ klappt nur, wenn du angemeldet bist.</span>' : ""}
+      ${!AUTH ? '<span class="small">„Erfolge meiner Witze“ klappt nur, wenn du angemeldet bist.</span>' : ""}
       <div class="row">${sub ? '<button class="btn ghost" data-push-save>Speichern</button><button class="btn ghost" data-push-test>Test senden</button><button class="btn ghost" data-push-off>Ausschalten</button>' : '<button class="btn" data-push-on>Benachrichtigungen einschalten</button>'}</div>
     </div>`;
   }
@@ -1944,6 +1954,121 @@
       else if (kind === "test") { const sub = await pushSub(); const r = await callFn({ type: "test", endpoint: sub.endpoint }); toast(r.sent && r.sent.ok ? "Test verschickt. Gleich sollte er ankommen." : "Der Test hat nicht geklappt."); }
     } catch (e) { toast(e.code === "push_denied" ? "Du hast die Benachrichtigungen nicht erlaubt." : errorText(e)); }
     finally { btn.disabled = false; drawPushBox(); }
+  }
+
+  /* ───────── Suche (#/suche?q=…) ───────── */
+  const SR = { timer: null, q: "", seq: 0 };
+  const SEARCH_TIPS = ["Chef", "Kaffee", "Fritzchen", "Montag", "Arzt", "Katze", "Ehe", "Computer"];
+  async function renderSearch(token, q) {
+    SR.q = q || "";
+    $("#main").innerHTML = `<div class="view search">
+      <div><h1>Witze suchen</h1><p class="muted">Finde Witze zu deinem Thema, zum Beispiel für die nächste Rede oder die Kaffeepause.</p></div>
+      <form class="search-bar" id="searchForm" role="search"><input type="search" id="searchQ" value="${esc(SR.q)}" placeholder="Stichwort, z. B. Chef oder Kaffee" maxlength="60" autocomplete="off" enterkeyhint="search" aria-label="Suchbegriff"><button class="btn">Suchen</button></form>
+      <div class="chips static search-tips">${SEARCH_TIPS.map((t) => `<button class="chip" data-search-tip="${t}">${t}</button>`).join("")}</div>
+      <div id="searchOut"></div>
+    </div>`;
+    if (!SR.q && matchMedia("(pointer: fine)").matches) $("#searchQ").focus();
+    await runSearch(token);
+  }
+  async function runSearch(token) {
+    const out = $("#searchOut"); if (!out) return;
+    const q = SR.q.trim(), seq = ++SR.seq;
+    if (q.replace(/[^0-9a-zäöüß]/gi, "").length < 2) { out.innerHTML = q ? `<p class="muted on-y">Bitte mindestens 2 Buchstaben eingeben.</p>` : ""; return; }
+    out.innerHTML = '<p class="loading">Suche …</p>';
+    let rows = [];
+    try { rows = LIVE ? (await rpc("search_jokes", { p_device: DEVICE, p_query: q, p_category: null, p_limit: 40, p_offset: 0 })).map(fromRow)
+      : (await API.ranking("all", null, 400, 0).catch(() => [])).concat(await API.ranking("week", null, 400, 0).catch(() => []))
+          .filter((j, i, a) => a.findIndex((x) => x.id === j.id) === i && q.toLowerCase().split(/\s+/).every((t) => j.text.toLowerCase().includes(t))); }
+    catch (e) { if (seq === SR.seq) out.innerHTML = `<p class="empty">${esc(errorText(e))}</p>`; return; }
+    if (seq !== SR.seq || (token != null && stale(token))) return;
+    rows = rows.filter((j) => !S.hiddenForMe.has(j.id));
+    S.searchRows = rows;
+    out.innerHTML = rows.length
+      ? `<div class="meta-row"><span>Treffer für „${esc(q)}“, die besten zuerst</span><span>${rows.length === 40 ? "40+" : rows.length} ${rows.length === 1 ? "Witz" : "Witze"}</span></div>
+         <ol class="list">${rows.map((j, i) => cardHtml(j, i + 1, "")).join("")}</ol>`
+      : `<p class="empty">Zu „${esc(q)}“ gibt es noch keinen Witz. Kennst du einen? <button class="link" data-post-open>Jetzt posten</button></p>`;
+    loadReactions(rows);
+  }
+  function searchInput(v) {
+    SR.q = v; clearTimeout(SR.timer);
+    SR.timer = setTimeout(() => { history.replaceState(null, "", "#/suche" + (SR.q.trim() ? "?q=" + encodeURIComponent(SR.q.trim()) : "")); runSearch(null); }, 350);
+  }
+
+  /* ───────── Witz als Grußkarte ───────── */
+  const OCCASIONS = [
+    ["einfach", "😄", "Ein Witz für dich", "#ffc928"], ["geburtstag", "🎂", "Alles Gute zum Geburtstag", "#ff9eb5"],
+    ["morgen", "☀️", "Guten Morgen", "#ffd27a"], ["montag", "☕", "Schönen Montag", "#9fd3ea"],
+    ["wochenende", "🎉", "Schönes Wochenende", "#c9b6e4"], ["feierabend", "🍻", "Schönen Feierabend", "#f6b37e"],
+    ["besserung", "🍀", "Gute Besserung", "#a7dcb8"], ["danke", "💛", "Danke dir", "#ffe08a"],
+  ];
+  const GC = { occ: "einfach", to: "", from: "" };
+  function cardBoxHtml() {
+    return `<section class="gcard" id="gcard" hidden aria-label="Grußkarte">
+      <h2>Als Grußkarte verschicken</h2>
+      <div class="chips static">${OCCASIONS.map(([k, e, t]) => `<button class="chip" data-card-occ="${k}" aria-pressed="${GC.occ === k}">${e} ${esc(t.replace(/^Alles Gute zum /, "").replace(/^Schönen |^Schönes |^Guten /, ""))}</button>`).join("")}</div>
+      <div class="gcard-in"><label>Für<input type="text" id="gcTo" maxlength="24" value="${esc(GC.to)}" placeholder="z. B. Anna" autocomplete="off"></label>
+        <label>Von<input type="text" id="gcFrom" maxlength="24" value="${esc(GC.from)}" placeholder="z. B. Marvin" autocomplete="off"></label></div>
+      <canvas id="gcCanvas" aria-label="Vorschau der Grußkarte"></canvas>
+      <div class="row"><button class="btn" data-card-share>Karte verschicken</button><button class="btn ghost" data-card-close>Schließen</button></div>
+      <p class="muted small" id="gcMsg" role="status"></p>
+    </section>`;
+  }
+  function drawCard() {
+    const canvas = $("#gcCanvas"), j = S.detail; if (!canvas || !j) return;
+    const [, emoji, title, bg] = OCCASIONS.find((o) => o[0] === GC.occ) || OCCASIONS[0];
+    const W = 1080, H = 1350, pad = 76, c = canvas.getContext("2d");
+    canvas.width = W; canvas.height = H;
+    const DISPLAY = getComputedStyle(document.documentElement).getPropertyValue("--f-display");
+    const BODY = getComputedStyle(document.documentElement).getPropertyValue("--f-body");
+    c.fillStyle = bg; c.fillRect(0, 0, W, H); c.textBaseline = "top";
+    // Konfetti-Punkte am Rand
+    const dots = ["#15172a", "#ffffff"]; for (let i = 0; i < 36; i++) { const x = (i * 97 + 31) % W, y = (i * 211 + 17) % H; if (y > 330 && y < H - 200 && x > 60 && x < W - 60) continue; c.globalAlpha = 0.18; c.fillStyle = dots[i % 2]; c.beginPath(); c.arc(x, y, 8 + (i % 4) * 4, 0, Math.PI * 2); c.fill(); }
+    c.globalAlpha = 1;
+    c.font = `110px ${BODY}`; c.fillText(emoji, pad, 70);
+    const head = GC.to ? `${title}, ${GC.to}!` : `${title}!`;
+    let hs = 78; c.fillStyle = "#15172a";
+    for (;;) { c.font = `800 ${hs}px ${DISPLAY}`; if (wrapLines(c, head, W - 2 * pad).length <= 2 || hs <= 46) break; hs -= 4; }
+    const hl = wrapLines(c, head, W - 2 * pad); let y = 210; for (const l of hl) { c.fillText(l, pad, y); y += hs * 1.15; }
+    const top = y + 40, bottom = H - 170, cp = 56, maxW = W - 2 * pad - 2 * cp;
+    let size = 64, lines, lh;
+    for (;;) { c.font = `500 ${size}px ${BODY}`; lines = wrapLines(c, j.text, maxW); lh = size * 1.3; if (cp * 2 + lines.length * lh <= bottom - top || size <= 26) break; size -= 2; }
+    const ch = cp * 2 + lines.length * lh - (lh - size), cy = top + Math.max(0, (bottom - top - ch) / 2);
+    c.fillStyle = "#15172a"; rr(c, pad, cy + 12, W - 2 * pad, ch, 44); c.fill();
+    c.fillStyle = "#ffffff"; rr(c, pad, cy, W - 2 * pad, ch, 44); c.fill();
+    c.fillStyle = "#15172a"; c.font = `500 ${size}px ${BODY}`; let ty = cy + cp; for (const l of lines) { c.fillText(l, pad + cp, ty); ty += lh; }
+    // Fußzeile: Absender links, Lachwerk rechts
+    const fy = H - 110;
+    if (GC.from) { c.font = `700 40px ${BODY}`; c.fillStyle = "#15172a"; c.fillText("Von " + GC.from, pad, fy); }
+    const ls = 40; c.font = `800 ${ls}px ${DISPLAY}`; const lw = c.measureText("Lach").width, ww = c.measureText("werk").width, lx = W - pad - lw - ww - ls * 0.36 - 4;
+    c.fillStyle = "#15172a"; c.fillText("Lach", lx, fy); rr(c, lx + lw + 4, fy - ls * 0.12, ww + ls * 0.36, ls * 1.18, ls * 0.18); c.fill();
+    c.fillStyle = bg; c.fillText("werk", lx + lw + 4 + ls * 0.18, fy);
+    c.fillStyle = "#15172a"; c.font = `500 26px ${BODY}`; const host = location.host || "lachwerk.github.io"; c.fillText(host, W - pad - c.measureText(host).width, fy + 56);
+  }
+  async function shareCard() {
+    const j = S.detail, msg = $("#gcMsg"), canvas = $("#gcCanvas"); if (!j || !canvas) return;
+    const blob = await new Promise((r) => canvas.toBlob(r, "image/png"));
+    if (!blob) { msg.textContent = "Die Karte konnte nicht erstellt werden."; return; }
+    const file = new File([blob], `lachwerk-grusskarte-${j.id}.png`, { type: "image/png" });
+    const text = (GC.to ? `Für ${GC.to}: ` : "") + "Ein Witz für dich 😄 Mehr davon: " + shareUrl(j.id);
+    try { if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], text }); return; } }
+    catch (e) { if (e.name === "AbortError") return; }
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = file.name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    msg.textContent = "Karte gespeichert. Jetzt in WhatsApp oder per Mail als Bild verschicken.";
+  }
+
+  /* ───────── Erfolge eigener Witze: Benachrichtigung anbieten ───────── */
+  async function drawMinePush() {
+    const box = $("#minePush"); if (!box) return;
+    if (!LIVE || !PUSH_OK || !AUTH || (typeof Notification !== "undefined" && Notification.permission === "denied")) { box.remove(); return; }
+    const sub = await pushSub().catch(() => null), topics = store.get("push_topics", []);
+    if (sub && topics.includes("mine")) { box.innerHTML = `<p class="small muted">🔔 Du bekommst Bescheid, wenn dieser Witz in die Top 3 kommt oder Likes sammelt.</p>`; return; }
+    box.innerHTML = `<div class="install push"><strong>🔔 Wie läuft dein Witz?</strong><span>Wir sagen dir Bescheid, wenn er in die Top 3 von heute kommt oder 10, 25, 50 und 100 Likes knackt.</span><div><button class="btn" data-push-mine>Benachrichtigen</button></div></div>`;
+  }
+  // Angemeldet und Benachrichtigungen an: Abo einmal pro Sitzung mit dem Konto verknüpfen
+  async function syncPushUser() {
+    if (!LIVE || !PUSH_OK || !AUTH || session.get("push_synced") === AUTH.username) return;
+    try { const sub = await pushSub(); if (!sub) return; await rpc("push_subscribe", { p_device: DEVICE, p_sub: sub.toJSON(), p_topics: store.get("push_topics", ["daily", "mine"]) }); session.set("push_synced", AUTH.username); } catch (e) { /* später erneut */ }
   }
 
   /* ───────── App installieren (PWA) ───────── */
@@ -2351,6 +2476,12 @@
     if ("scrPre" in d) { const [bg, ac, card] = d.scrPre.split(","); $("#scrBg").value = "#" + bg; $("#scrAc").value = "#" + ac; $("#scrCard").value = "#" + card; updateScreen(); return; }
     if ("scrCopy" in d) { const u = $("#scrUrl").value; navigator.clipboard ? navigator.clipboard.writeText(u).then(() => toast("Link kopiert."), () => { $("#scrUrl").select(); }) : $("#scrUrl").select(); return; }
     if ("scrShort" in d) { screenShortLink(); return; }
+    if ("cardOpen" in d) { const g = $("#gcard"); g.hidden = false; drawCard(); g.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+    if (d.cardOcc) { GC.occ = d.cardOcc; document.querySelectorAll("[data-card-occ]").forEach((b) => b.setAttribute("aria-pressed", b === t)); drawCard(); return; }
+    if ("cardShare" in d) { shareCard(); return; }
+    if ("cardClose" in d) { $("#gcard").hidden = true; return; }
+    if (d.searchTip) { $("#searchQ").value = d.searchTip; SR.q = d.searchTip; history.replaceState(null, "", "#/suche?q=" + encodeURIComponent(d.searchTip)); runSearch(null); return; }
+    if ("pushMine" in d) { t.disabled = true; pushEnable([...new Set([...store.get("push_topics", ["daily"]), "mine"])]).then(() => { toast("Alles klar, wir melden uns!"); drawMinePush(); }, (e) => { t.disabled = false; toast(e.code === "push_denied" ? "Du hast die Benachrichtigungen nicht erlaubt." : errorText(e)); }); return; }
     if (d.quizOpt) { quizAnswer(Number(d.quizOpt)); return; }
     if ("quizNext" in d) { quizNext(); return; }
     if ("quizShare" in d) { quizShare(); return; }
@@ -2526,6 +2657,8 @@
   $("#postText").addEventListener("input", checkSimilar);
   // Bildschirm-Link: jede Änderung sofort in Link und Vorschau übernehmen
   document.addEventListener("input", (e) => {
+    if (e.target.id === "searchQ") { searchInput(e.target.value); return; }
+    if (e.target.id === "gcTo" || e.target.id === "gcFrom") { GC.to = $("#gcTo").value.trim(); GC.from = $("#gcFrom").value.trim(); drawCard(); return; }
     if (!e.target.closest || !e.target.closest(".scr-form")) return;
     if (e.target.type === "color") $("#" + e.target.id.slice(0, -1)).value = e.target.value;
     updateScreen();
@@ -2551,6 +2684,7 @@
     } finally { btn.textContent = "Veröffentlichen"; btn.disabled = !$("#dupBox").hidden; }
   });
   document.addEventListener("submit", async (e) => {
+    if (e.target.id === "searchForm") { e.preventDefault(); clearTimeout(SR.timer); SR.q = $("#searchQ").value; history.replaceState(null, "", "#/suche?q=" + encodeURIComponent(SR.q.trim())); $("#searchQ").blur(); runSearch(null); return; }
     if (e.target.id === "groupCreate" || e.target.id === "groupJoin") {
       e.preventDefault();
       const create = e.target.id === "groupCreate", err = $(create ? "#groupCreateErr" : "#groupJoinErr"), btn = e.target.querySelector("button");
