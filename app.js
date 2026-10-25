@@ -38,6 +38,67 @@
   /* ───────── Hilfen ───────── */
   const $ = (s) => document.querySelector(s);
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  /* ───────── Saisonale Deko (Halloween, Advent, Ostern …) ───────── */
+  // Ostersonntag (gregorianisch, Gauß/Meeus)
+  function easterUtc(y) {
+    const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
+    const h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+    const n = h + l - 7 * m + 114; return Date.UTC(y, Math.floor(n / 31) - 1, (n % 31) + 1);
+  }
+  // [Hauptsymbol am Logo, zwei Deko-Symbole, Gruß]
+  const SEASONS = {
+    neujahr: ["🎆", ["🥂", "✨"], "Frohes neues Jahr!"], valentin: ["❤️", ["💌", "🌹"], "Schönen Valentinstag!"],
+    karneval: ["🎭", ["🎉", "🤡"], "Helau und Alaaf!"], april: ["🤡", ["🃏", "😜"], "Vorsicht, heute ist der 1. April!"],
+    ostern: ["🐣", ["🥚", "🌷"], "Frohe Ostern!"], weltlachtag: ["😂", ["🎈", "🤣"], "Heute ist Weltlachtag!"],
+    muttertag: ["💐", ["❤️", "🌷"], "Alles Liebe zum Muttertag!"], vatertag: ["🍺", ["🥨", "🚲"], "Schönen Vatertag!"],
+    sommer: ["☀️", ["🍦", "🏖️"], "Schönen Sommeranfang!"], witztag: ["🤣", ["🎤", "😆"], "Heute ist Welttag des Witzes!"],
+    einheit: ["🇩🇪", ["🎉", "🕊️"], "Schönen Tag der Deutschen Einheit!"], halloween: ["🎃", ["🦇", "👻"], "Happy Halloween!"],
+    martin: ["🏮", ["🌙", "🐴"], "Schönen Martinstag!"], nikolaus: ["🎅", ["🍫", "🥾"], "Schönen Nikolaustag!"],
+    advent: ["🎄", ["⭐", "🕯️"], "Schöne Adventszeit!"], weihnachten: ["🎄", ["🎁", "⭐"], "Frohe Weihnachten!"],
+    silvester: ["🎆", ["🥂", "🍀"], "Guten Rutsch!"],
+  };
+  function seasonFor(date) {
+    const s = date.toLocaleDateString("sv-SE", { timeZone: "Europe/Berlin" }), y = +s.slice(0, 4), m = +s.slice(5, 7), d = +s.slice(8, 10);
+    const t = Date.UTC(y, m - 1, d), DAY = 864e5, md = m * 100 + d, e = easterUtc(y);
+    const sunday = (mon, n) => { const w = new Date(Date.UTC(y, mon - 1, 1)).getUTCDay(); return Date.UTC(y, mon - 1, 1 + ((7 - w) % 7) + 7 * (n - 1)); };
+    if (md <= 102) return "neujahr";
+    if (md === 213 || md === 214) return "valentin";
+    if (t >= e - 52 * DAY && t <= e - 46 * DAY) return "karneval";      // Weiberfastnacht bis Aschermittwoch
+    if (md === 401) return "april";
+    if (t >= e - 3 * DAY && t <= e + DAY) return "ostern";              // Gründonnerstag bis Ostermontag
+    if (t === sunday(5, 1)) return "weltlachtag";
+    if (t === e + 39 * DAY) return "vatertag";                          // Christi Himmelfahrt
+    if (t === sunday(5, 2)) return "muttertag";
+    if (md === 621) return "sommer";
+    if (md === 701) return "witztag";
+    if (md === 1003) return "einheit";
+    if (md >= 1024 && md <= 1101) return "halloween";
+    if (md === 1110 || md === 1111) return "martin";
+    if (md === 1206) return "nikolaus";
+    if (md >= 1224 && md <= 1226) return "weihnachten";
+    if (md >= 1201 && md <= 1223) return "advent";
+    if (md >= 1227) return "silvester";
+    return null;
+  }
+  // Zum Ausprobieren: ?saison=ostern (oder ?saison=aus) in der Adresse, gilt für diese Sitzung
+  const SEASON = (() => {
+    let q = null; try { q = new URLSearchParams(location.search).get("saison"); } catch (e) { /* egal */ }
+    if (q) session.set("season", q.toLowerCase());
+    const o = session.get("season");
+    if (o === "aus") return null;
+    const k = o && SEASONS[o] ? o : seasonFor(new Date());
+    return k ? { key: k, main: SEASONS[k][0], side: SEASONS[k][1], greet: SEASONS[k][2] } : null;
+  })();
+  const seasonBadge = () => (SEASON ? `<i class="season-badge" aria-hidden="true">${SEASON.main}</i>` : "");
+  function applySeason() {
+    if (!SEASON) return;
+    document.body.dataset.season = SEASON.key;
+    const logo = document.querySelector("header .logo");
+    if (logo && !logo.querySelector(".season-badge")) { logo.insertAdjacentHTML("beforeend", seasonBadge()); logo.title = SEASON.greet; }
+    document.body.insertAdjacentHTML("beforeend", `<div class="season-side" aria-hidden="true"><i>${SEASON.side[0]}</i><i>${SEASON.side[1]}</i><i>${SEASON.main}</i></div>`);
+    const f = document.querySelector("footer"); if (f) f.insertAdjacentHTML("afterbegin", `<p class="season-greet">${SEASON.main} ${esc(SEASON.greet)}</p>`);
+  }
+
   const fmt = (n) => Number(n).toLocaleString("de-DE");
   function ago(iso) {
     const h = (Date.now() - new Date(iso).getTime()) / 36e5;
@@ -1718,7 +1779,7 @@
     if (s.live) { drawLiveTv(); return; }
     const len = s.t.length, size = len > 160 ? "s" : len > 90 ? "m" : "l";
     const quiz = s.quiz ? `<div class="tv-quiz">${s.quiz.options.map((o, i) => `<span class="${i + 1 === s.quiz.correct ? "ok" : "no"}"><b>${"ABC"[i]}</b>${esc(o)}</span>`).join("")}</div>` : "";
-    tvFrame(`<div class="tv-top"><span class="logo">Lach<span>werk</span></span><span class="tv-k">${esc(s.k)}</span></div>
+    tvFrame(`<div class="tv-top"><span class="logo">Lach<span>werk</span>${seasonBadge()}</span><span class="tv-k">${esc(s.k)}</span></div>
       <div class="tv-mid${s.quiz ? " has-quiz" : ""}"><p class="tv-t tv-${s.qr || s.quiz ? "m" : size}">${esc(s.t)}</p>${quiz}</div>
       <div class="tv-bot"><div class="tv-left"><span class="tv-m">${esc(s.quiz && TV.revealed ? `Witz von @${s.quiz.author}` : s.m)}</span>${tvBrandHtml()}</div>
         <div class="tv-qr"><img src="qr.svg" alt="QR-Code zu lachwerk.github.io"><span>${s.quiz ? "Mehr Quiz: QR scannen" : "Jetzt mitbewerten"}</span></div></div>
@@ -1777,7 +1838,7 @@
       <div class="lv-bar"><i id="tvBar${k}" style="width:${n ? p : 0}%"></i></div><span class="lv-p" id="tvPct${k}">${n ? p + " %" : "–"}</span></div>`;
     const info = r.finished ? (win ? `${"AB"[win - 1]} gewinnt mit ${win === 1 ? pa : pb} %!` : n ? "Unentschieden!" : "Keine Stimmen. Nächste Runde gleich!") : `Noch ${lvLeftTv()} s · ${fmt(n)} ${n === 1 ? "Stimme" : "Stimmen"}`;
     if (!TV.qrCode || TV.qrFor !== TV.code) { TV.qrCode = TV.code ? qrSvg(liveUrl()) : ""; TV.qrFor = TV.code; }
-    tvFrame(`<div class="tv-top"><span class="logo">Lach<span>werk</span></span><span class="tv-k">⚡ Live-Duell · Welcher ist lustiger?</span></div>
+    tvFrame(`<div class="tv-top"><span class="logo">Lach<span>werk</span>${seasonBadge()}</span><span class="tv-k">⚡ Live-Duell · Welcher ist lustiger?</span></div>
       <div class="lv-pair">${card(1, r.a_text, pa)}${card(2, r.b_text, pb)}</div>
       <div class="tv-bot"><div class="tv-left"><span class="tv-m lv-info" id="tvLvInfo">${esc(info)}</span>${tvBrandHtml()}</div>
         <div class="tv-qr">${TV.qrCode ? `<div class="tv-qrbox">${TV.qrCode}</div>` : `<img src="qr.svg" alt="">`}<span>Handy zücken &amp; abstimmen</span></div></div>`, " tv-live");
@@ -2827,6 +2888,7 @@
       else toast(`E-Mail bestätigt. Willkommen, @${AUTH ? AUTH.username : ""}!`);
     }).catch(() => render());
   }
+  applySeason();
   handleAuthLink();
 
   // Installierbar machen und offline anzeigen (nur über https oder localhost)

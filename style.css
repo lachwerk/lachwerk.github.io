@@ -531,6 +531,23 @@ body.tv-mode { background: var(--yellow); min-height: 100vh; }
 .gcard .chip[aria-pressed="true"] { background: var(--ink); color: var(--yellow); }
 #minePush .install { margin: 0; }
 
+/* ───────── Saisonale Deko ───────── */
+.logo { position: relative; }
+.season-badge { position: absolute; top: -.5em; right: -.62em; font-size: .64em; font-style: normal; line-height: 1; transform: rotate(14deg); transform-origin: 50% 90%; pointer-events: none; filter: drop-shadow(0 2px 0 rgba(0, 0, 0, .18)); animation: season-sway 3.2s ease-in-out infinite; }
+@keyframes season-sway { 0%, 100% { transform: rotate(8deg); } 50% { transform: rotate(20deg) translateY(-1px); } }
+.season-greet { margin: 0; font-weight: 800; font-size: .86rem; }
+.season-side { display: none; }
+@media (min-width: 980px) {
+  .season-side { display: block; position: fixed; inset: 0; pointer-events: none; z-index: 0; }
+  .season-side i { position: absolute; font-style: normal; font-size: 34px; opacity: .55; }
+  .season-side i:nth-child(1) { right: 4vw; top: 110px; transform: rotate(12deg); }
+  .season-side i:nth-child(2) { left: 3.5vw; bottom: 60px; transform: rotate(-14deg); }
+  .season-side i:nth-child(3) { left: 5vw; top: 46%; font-size: 26px; opacity: .4; transform: rotate(-6deg); }
+  .wrap { position: relative; z-index: 1; }
+}
+body.tv-mode .season-side { display: none; }
+@media (prefers-reduced-motion: reduce) { .season-badge { animation: none; } }
+
 @media (prefers-reduced-motion: reduce) { .duel-card { transition: none; } }
 @media (prefers-reduced-motion: reduce) { .swipe-card { transition: none; } .btn:active, .who:active, .round:active, .fab:active { transform: none; } }
 
