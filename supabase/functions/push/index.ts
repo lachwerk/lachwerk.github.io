@@ -10,7 +10,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 import webpush from "npm:web-push@3.6.7";
 
-const SITE = "https://lachwerk.github.io/";
+const SITE = "https://lach-werk.de/";
 // Server-Schlüssel: neue „secret“-Keys (SUPABASE_SECRET_KEYS) oder der klassische service_role-Key
 function serverKey(): string {
   try { const k = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") || "{}"); const v = Object.values(k)[0]; if (typeof v === "string" && v) return v; } catch { /* weiter */ }
@@ -39,7 +39,7 @@ async function initKeys(): Promise<string> {
     await setSetting("vapid_public", k.publicKey);
     pub = k.publicKey; priv = k.privateKey;
   }
-  const contact = (await getSetting("contact_email")) || "noreply@lachwerk.github.io";
+  const contact = (await getSetting("contact_email")) || "noreply@lach-werk.de";
   webpush.setVapidDetails("mailto:" + contact, pub, priv);
   return pub;
 }

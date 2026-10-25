@@ -1752,7 +1752,7 @@
     if (quiz[0]) slides.splice(Math.min(2, slides.length), 0, { k: "🤔 Errate die Pointe", quiz: quizRow(quiz[0]), t: quiz[0].setup, m: "Auflösung gleich …" });
     if (battle) slides.push({ k: "🥊 Pointen-Battle von heute", t: battle.setup + (best ? "\n" + best.text : "\n… und deine Pointe?"), m: best ? "Führt gerade: @" + best.author : "Schreib die beste Pointe!" });
     if (opt && opt.live === "1") slides.push({ live: true });
-    else slides.push({ k: "Mach mit!", t: "Bewerte die Witze von heute und entscheide, wer Witz des Tages wird.", m: "lachwerk.github.io", qr: true });
+    else slides.push({ k: "Mach mit!", t: "Bewerte die Witze von heute und entscheide, wer Witz des Tages wird.", m: "lach-werk.de", qr: true });
     TV.slides = slides;
   }
   // Größe, Seitenverhältnis und Drehung der Bildschirm-Fläche berechnen
@@ -1782,7 +1782,7 @@
     tvFrame(`<div class="tv-top"><span class="logo">Lach<span>werk</span>${seasonBadge()}</span><span class="tv-k">${esc(s.k)}</span></div>
       <div class="tv-mid${s.quiz ? " has-quiz" : ""}"><p class="tv-t tv-${s.qr || s.quiz ? "m" : size}">${esc(s.t)}</p>${quiz}</div>
       <div class="tv-bot"><div class="tv-left"><span class="tv-m">${esc(s.quiz && TV.revealed ? `Witz von @${s.quiz.author}` : s.m)}</span>${tvBrandHtml()}</div>
-        <div class="tv-qr"><img src="qr.svg" alt="QR-Code zu lachwerk.github.io"><span>${s.quiz ? "Mehr Quiz: QR scannen" : "Jetzt mitbewerten"}</span></div></div>
+        <div class="tv-qr"><img src="qr.svg" alt="QR-Code zu lach-werk.de"><span>${s.quiz ? "Mehr Quiz: QR scannen" : "Jetzt mitbewerten"}</span></div></div>
       ${tvDots()}`, s.quiz && TV.revealed ? " reveal" : "");
   }
   // Ablauf: jede Folie bekommt ihre Zeit, Quiz-Folien etwas mehr, Live-Duelle laufen bis zum Rundenende
@@ -2103,7 +2103,7 @@
     const ls = 40; c.font = `800 ${ls}px ${DISPLAY}`; const lw = c.measureText("Lach").width, ww = c.measureText("werk").width, lx = W - pad - lw - ww - ls * 0.36 - 4;
     c.fillStyle = "#15172a"; c.fillText("Lach", lx, fy); rr(c, lx + lw + 4, fy - ls * 0.12, ww + ls * 0.36, ls * 1.18, ls * 0.18); c.fill();
     c.fillStyle = bg; c.fillText("werk", lx + lw + 4 + ls * 0.18, fy);
-    c.fillStyle = "#15172a"; c.font = `500 26px ${BODY}`; const host = location.host || "lachwerk.github.io"; c.fillText(host, W - pad - c.measureText(host).width, fy + 56);
+    c.fillStyle = "#15172a"; c.font = `500 26px ${BODY}`; const host = location.host || "lach-werk.de"; c.fillText(host, W - pad - c.measureText(host).width, fy + 56);
   }
   async function shareCard() {
     const j = S.detail, msg = $("#gcMsg"), canvas = $("#gcCanvas"); if (!j || !canvas) return;

@@ -8,7 +8,7 @@ Rankings für **Heute**, **Woche** und **Alltime**. Reine HTML/CSS/JS-Dateien, k
 1. Auf github.com ein neues Repository anlegen, z. B. `lachwerk` (öffentlich).
 2. **Add file → Upload files** und alle Dateien aus diesem Ordner hineinziehen. Danach **Commit changes**.
 3. **Settings → Pages → Build and deployment**: Source *Deploy from a branch*, Branch *main*, Ordner */ (root)*, **Save**.
-4. Nach ca. 1 Minute ist die Seite erreichbar unter `https://lachwerk.github.io/`.
+4. Nach ca. 1 Minute ist die Seite erreichbar unter `https://lach-werk.de/`.
 
 Im Demo-Modus läuft alles sofort mit 360 Startwitzen. Jeden Tag erscheint unter „Heute“ automatisch eine neue Auswahl. Stimmen und neue Witze bleiben aber **nur im Browser des jeweiligen Besuchers**.
 Zum Ausprobieren reicht das. Für eine echte Community schaltest du den Live-Modus ein.
@@ -36,7 +36,7 @@ GitHub Pages kann nur Dateien ausliefern und nichts speichern. Die Daten liegen 
    Der anon-Key ist öffentlich und darf dort stehen. Den **service_role / secret** Key niemals eintragen.
 
 6. Unter **Authentication → URL Configuration**:
-   - **Site URL:** `https://lachwerk.github.io/`
+   - **Site URL:** `https://lach-werk.de/`
    - **Redirect URLs:** dieselbe Adresse hinzufügen
    Dorthin führen die Links in den Bestätigungs- und Passwort-E-Mails.
 7. Optional: Unter **Authentication → Emails** die Texte der E-Mails auf Deutsch anpassen.
@@ -88,7 +88,7 @@ Für eine schon eingerichtete Datenbank einmal `erweiterung.sql` im SQL Editor a
 | Monats-Saison | `#/autoren` → Saison: Rangliste des Kalendermonats (mind. 10 Stimmen). Am Monatsersten wird der Witzbold des Monats gekrönt und bekommt ein Abzeichen. |
 | Lieblingsthemen | Beim Bewerten und im Duell lassen sich Kategorien wählen (im Browser gespeichert). |
 | Wortfilter | Witze und Pointen mit gesperrten Wörtern werden abgelehnt. Liste unter `#/admin` → Wortfilter, `wort*` sperrt alle Wörter, die so beginnen. |
-| Bildschirm-Modus | `#/bildschirm` öffnet den Gestalter: Querformat 16:9 oder Hochformat 9:16 (auch für gedreht montierte Fernseher), Firmenfarben (Hintergrund, Akzent, Karte), Firmenname, Kategorien und Wechselzeit, mit Live-Vorschau. Ergebnis ist ein Link `#/tv?f=hoch&bg=…&ac=…&card=…&n=…&k=…&t=…` oder ein Kurzlink `lachwerk.github.io/tv/CODE` (Erweiterung 7, `404.html` leitet um). Antippen für Vollbild. |
+| Bildschirm-Modus | `#/bildschirm` öffnet den Gestalter: Querformat 16:9 oder Hochformat 9:16 (auch für gedreht montierte Fernseher), Firmenfarben (Hintergrund, Akzent, Karte), Firmenname, Kategorien und Wechselzeit, mit Live-Vorschau. Ergebnis ist ein Link `#/tv?f=hoch&bg=…&ac=…&card=…&n=…&k=…&t=…` oder ein Kurzlink `lach-werk.de/tv/CODE` (Erweiterung 7, `404.html` leitet um). Antippen für Vollbild. |
 | Saisonale Deko | Automatisch nach Datum (deutsche Zeit): Symbol am Logo, dezente Deko am Rand (ab 980 px Breite), Gruß in der Fußzeile, auch im Bildschirm-Modus. Anlässe: Neujahr, Valentinstag, Karneval, 1. April, Ostern, Weltlachtag, Vatertag, Muttertag, Sommeranfang, Welttag des Witzes, Tag der Deutschen Einheit, Halloween, Martinstag, Nikolaus, Advent, Weihnachten, Silvester. Vorschau: `?saison=ostern`, abschalten: `?saison=aus`. |
 | Suche | `#/suche?q=…`: alle Suchwörter müssen vorkommen, sortiert nach Score. Menüpunkt „🔍 Suche“. |
 | Grußkarte | Auf der Witz-Seite „Als Grußkarte“: Anlass (Geburtstag, Montag, Gute Besserung …), Für/Von, Bild 1080×1350 zum Teilen. |
@@ -121,7 +121,7 @@ Der Admin-Bereich (`#/admin`, ab Erweiterung 3) hat diese Reiter:
 
 `partner.html` ist die Angebotsseite „Lachwerk für Unternehmen“ (Bildschirme und Sponsoring). Die Kontakt-E-Mail dafür steht im Admin-Bereich unter „Einstellungen“.
 
-Seite mit `#/admin` am Ende aufrufen, z. B. `https://lachwerk.github.io/#/admin`, und den Admin-Schlüssel eingeben.
+Seite mit `#/admin` am Ende aufrufen, z. B. `https://lach-werk.de/#/admin`, und den Admin-Schlüssel eingeben.
 Dort siehst du gemeldete und ausgeblendete Witze und kannst sie **freigeben** oder **entfernen**.
 Im Demo-Modus lautet der Schlüssel `demo-moderation`. Konten gelten dort nur im jeweiligen Browser und haben kein echtes Passwort.
 
@@ -160,7 +160,7 @@ erweiterung3.sql  größerer Admin-Bereich, Nutzer sperren, Ankündigung, Export
 erweiterung4.sql  Sponsoren, Kontakt, weitere Admins
 erweiterung5.sql  Push-Nachrichten (dazu supabase/functions/push/index.ts)
 erweiterung6.sql  Konto selbst löschen, Pointen melden
-erweiterung7.sql  Kurzlinks für Bildschirme (lachwerk.github.io/tv/CODE)
+erweiterung7.sql  Kurzlinks für Bildschirme (lach-werk.de/tv/CODE)
 erweiterung8.sql  Errate die Pointe, Live-Duell am Bildschirm, Gruppen und Ligen
 erweiterung9.sql  Bestenliste „Neu“ (letzte 6 Stunden, neueste zuerst)
 erweiterung10.sql Battle-Push-Zeitplan entfernen (Battle abgeschaltet)
@@ -181,7 +181,7 @@ favicon.svg       Icon
 ## Vor dem Veröffentlichen
 
 - [ ] `impressum.html` und `datenschutz.html` ausfüllen (für eine öffentliche Seite in Deutschland Pflicht)
-- [ ] In `index.html` bei `og:image` die volle Adresse eintragen, z. B. `https://lachwerk.github.io/og-image.png`. Dann zeigt WhatsApp das Vorschaubild.
+- [ ] In `index.html` bei `og:image` die volle Adresse eintragen, z. B. `https://lach-werk.de/og-image.png`. Dann zeigt WhatsApp das Vorschaubild.
 - [ ] Startwitze durchsehen. Die Liste steht unten in `supabase.sql` und in `startwitze.js`.
 - [ ] Moderation testen: einen Witz melden und unter `#/admin` freigeben
 - [ ] Eigene Domain (optional): Settings → Pages → Custom domain
