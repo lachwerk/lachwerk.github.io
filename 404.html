@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lachwerk</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <script>
+    // Kurzlinks wie lachwerk.github.io/tv/AB3CD auf den Bildschirm-Modus der App umleiten
+    (function () {
+      var m = location.pathname.match(/\/tv\/([0-9a-z]{4,8})\/?$/i);
+      if (m) location.replace("/#/tv/" + m[1].toUpperCase());
+    })();
+  </script>
+  <style>
+    html, body { margin: 0; min-height: 100%; background: #ffc928; color: #15172a; font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+    main { max-width: 520px; margin: 0 auto; padding: 80px 20px; text-align: center; }
+    .logo { font: 800 2.4rem/1 ui-rounded, "Arial Rounded MT Bold", system-ui, sans-serif; letter-spacing: -.02em; }
+    .logo span { background: #15172a; color: #ffc928; padding: .04em .2em .1em; border-radius: 10px; margin-left: 2px; }
+    a.btn { display: inline-block; margin-top: 18px; background: #15172a; color: #ffc928; font-weight: 800; text-decoration: none; border-radius: 999px; padding: 12px 22px; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="logo">Lach<span>werk</span></div>
+    <p>Diese Seite gibt es leider nicht. Aber Witze gibt es genug.</p>
+    <a class="btn" href="/">Zur App</a>
+  </main>
+</body>
+</html>

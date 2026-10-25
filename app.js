@@ -63,7 +63,8 @@
   }
   const ERRORS = {
     own_joke: "Eigene Witze kannst du nicht bewerten.",
-    rate_limited: "Zu viele Stimmen in kurzer Zeit. Mach kurz Pause.",
+    rate_limited: "Zu viele Anfragen in kurzer Zeit. Mach kurz Pause.",
+    invalid_config: "Diese Einstellungen lassen sich nicht speichern.",
     ip_limit: "Von deinem Anschluss wurde dieser Witz schon oft bewertet.",
     joke_not_found: "Diesen Witz gibt es nicht mehr.",
     post_limit: "Du hast heute schon 10 Witze gepostet. Morgen geht es weiter.",
@@ -562,7 +563,9 @@
     if (h === "autoren") return { view: "authors" };
     if (h === "challenge") return { view: "challenge" };
     if (h === "battle") return { view: "battle" };
-    if (h === "tv" || h.startsWith("tv?")) { const q = new URLSearchParams(h.slice(3)); return { view: "tv", cats: (q.get("k") || "").split(",").filter((c) => c in CATS), sponsor: Number(q.get("s")) || null }; }
+    if (h === "tv" || h.startsWith("tv?")) return { view: "tv", ...tvOpts(new URLSearchParams(h.slice(3))) };
+    if (h.startsWith("tv/")) return { view: "tv", code: h.slice(3).replace(/[^0-9a-z]/gi, "").slice(0, 8).toUpperCase() };
+    if (h === "bildschirm" || h.startsWith("bildschirm?")) return { view: "screen", q: new URLSearchParams(h.slice(11)) };
     if (h.startsWith("kategorie/")) return { view: "list", cat: h.slice(10) };
     if (h.startsWith("u/")) { let n = h.slice(2); try { n = decodeURIComponent(n); } catch (e) { /* roh lassen */ } return { view: "profile", name: n }; }
     if (h === "admin") return { view: "admin" };
@@ -573,7 +576,7 @@
     if (S.adminKey || view === "admin" || isRoleAdmin()) items.push(["#/admin", "admin", "Moderation"]);
     $("#nav").innerHTML = items.map(([href, v, l]) => `<a href="${href}" ${view === v ? 'aria-current="page"' : ""}>${l}</a>`).join("");
     $("#listControls").style.display = view === "list" ? "grid" : "none";
-    $("#postBtn").hidden = view === "swipe" || view === "admin" || view === "duel";
+    $("#postBtn").hidden = view === "swipe" || view === "admin" || view === "duel" || view === "screen";
     const cur = document.querySelector('.nav [aria-current="page"]'); if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: "nearest", inline: "nearest" });
     $("#who").textContent = AUTH ? "@" + (AUTH.username || "Konto") : "Anmelden";
     $("#who").title = AUTH ? "Dein Konto" : "Anmelden oder registrieren (nur zum Posten nötig)";
@@ -586,7 +589,7 @@
   async function render() {
     const r = route(), token = ++renderToken;
     document.body.classList.toggle("tv-mode", r.view === "tv");
-    if (r.view !== "tv") stopTv();
+    if (r.view !== "tv") { stopTv(); document.body.style.removeProperty("--tv-page"); }
     if (r.cat && CATS[r.cat] && S.cat !== r.cat) { S.cat = r.cat; S.rows = []; renderChips(); }
     renderNav(r.view);
     try {
@@ -600,6 +603,7 @@
       else if (r.view === "challenge") await renderChallenge(token);
       else if (r.view === "battle") await renderBattle(token);
       else if (r.view === "tv") await renderTv(token, r);
+      else if (r.view === "screen") await renderScreen(token, r);
       else await renderAdmin(token);
     } catch (e) {
       if (token !== renderToken) return;
@@ -1295,16 +1299,40 @@
   }
 
   /* ───────── Bildschirm-Modus (z. B. für Fernseher im Studio) ───────── */
-  const TV = { timer: null, refresh: null, slides: [], i: 0 };
+  // Einstellungen aus dem Link: k=Kategorien, s=Sponsor, f=hoch|quer, dreh=r|l (gedreht montiert),
+  // bg/ac/card=Farben (Hex ohne #), n=Firmenname, t=Sekunden pro Folie
+  const HEX6 = (v) => (/^[0-9a-f]{6}$/i.test(v || "") ? "#" + v.toLowerCase() : null);
+  function tvOpts(q) {
+    const get = (k) => (q.get(k) || "").trim();
+    return {
+      cats: get("k").split(",").filter((c) => c in CATS), sponsor: Number(get("s")) || null,
+      format: ["hoch", "quer"].includes(get("f")) ? get("f") : null, rot: ["l", "r"].includes(get("dreh")) ? get("dreh") : null,
+      bg: HEX6(get("bg")), ac: HEX6(get("ac")), card: HEX6(get("card")),
+      name: get("n").slice(0, 40), sec: Math.min(60, Math.max(6, Number(get("t")) || 12)),
+    };
+  }
+  const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const lum = (h) => { const c = rgb(h).map((v) => v / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
+  const contrast = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+  const mixHex = (a, b, t) => "#" + rgb(a).map((v, i) => Math.round(v * (1 - t) + rgb(b)[i] * t).toString(16).padStart(2, "0")).join("");
+  const bestOn = (bg) => (contrast("#111111", bg) >= contrast("#ffffff", bg) ? "#111111" : "#ffffff");
+  // Farben als CSS-Variablen; Schrift wird automatisch dunkel/hell, wenn die Akzentfarbe schlecht lesbar wäre
+  function tvTheme(o) {
+    if (!o.bg && !o.ac && !o.card) return "";
+    const bg = o.bg || "#ffc928", ac = o.ac || "#15172a", card = o.card || "#ffffff";
+    const tx = contrast(ac, bg) >= 3 ? ac : bestOn(bg), ctx = contrast(ac, card) >= 4.5 ? ac : bestOn(card);
+    return `--yellow:${bg};--ink:${ac};--paper:${card};--tv-tx:${tx};--tv-ctx:${ctx};--muted-on-yellow:${mixHex(tx, bg, 0.25)}`;
+  }
+  const TV = { timer: null, refresh: null, slides: [], i: 0, opt: {} };
   function stopTv() { clearInterval(TV.timer); clearInterval(TV.refresh); TV.timer = TV.refresh = null; }
   async function loadTv(opt) {
     const safe = (p, d) => p.catch(() => d);
     const cats = (opt && opt.cats) || [];
     const [daily, todayAll, battle, brand] = await Promise.all([safe(API.daily(1), []), safe(API.ranking("day", null, cats.length ? 60 : 6, 0), []), safe(API.battleToday(), null),
-      opt && opt.sponsor ? safe(API.sponsor(opt.sponsor), null) : loadSponsors().then((x) => x.tv || null)]);
+      opt && opt.sponsor ? safe(API.sponsor(opt.sponsor), null) : opt && opt.name ? null : loadSponsors().then((x) => x.tv || null)]);
     let today = cats.length ? todayAll.filter((j) => cats.includes(j.cat)) : todayAll;
     if (cats.length && today.length < 3) today = (await safe(API.ranking("week", null, 80, 0), [])).filter((j) => cats.includes(j.cat));
-    TV.brand = brand;
+    TV.brand = brand || (opt && opt.name ? { name: opt.name } : null);
     let best = battle ? (await safe(API.battleEntries(battle.id), []))[0] : null;
     const slides = [];
     if (daily[0] && (!cats.length || cats.includes(daily[0].cat))) slides.push({ k: "👑 Witz des Tages · " + fmtDay(daily[0].day), t: daily[0].text, m: "@" + daily[0].author });
@@ -1313,10 +1341,21 @@
     slides.push({ k: "Mach mit!", t: "Bewerte die Witze von heute und entscheide, wer Witz des Tages wird.", m: "lachwerk.github.io", qr: true });
     TV.slides = slides;
   }
+  // Größe, Seitenverhältnis und Drehung der Bildschirm-Fläche berechnen
+  function tvBox(o) {
+    const W = window.innerWidth, H = window.innerHeight, rot = o.rot;
+    let w = rot ? H : W, h = rot ? W : H;              // Fläche aus Sicht des Inhalts
+    const fmt = o.format || (h > w ? "hoch" : "quer");
+    if (o.format) { const r = fmt === "hoch" ? 9 / 16 : 16 / 9; if (w / h > r) w = h * r; else h = w / r; }
+    const fixed = !!(o.format || rot);
+    const style = fixed ? `width:${w}px;height:${h}px;left:${(W - w) / 2}px;top:${(H - h) / 2}px;--vh:${h / 100}px;--vw:${w / 100}px;` + (rot ? `transform:rotate(${rot === "r" ? -90 : 90}deg);` : "") : "";
+    return { fmt, fixed, style };
+  }
   function drawTv() {
     const s = TV.slides[TV.i % TV.slides.length]; if (!s) return;
-    const len = s.t.length, size = len > 160 ? "s" : len > 90 ? "m" : "l";
-    $("#main").innerHTML = `<div class="tv" title="Tippen für Vollbild">
+    const len = s.t.length, size = len > 160 ? "s" : len > 90 ? "m" : "l", box = tvBox(TV.opt), theme = tvTheme(TV.opt);
+    if (theme) document.body.style.setProperty("--tv-page", TV.opt.bg || "#ffc928"); else document.body.style.removeProperty("--tv-page");
+    $("#main").innerHTML = `<div class="tv ${box.fmt}${box.fixed ? " fix" : ""}" style="${theme};${box.style}" title="Tippen für Vollbild">
       <div class="tv-top"><span class="logo">Lach<span>werk</span></span><span class="tv-k">${esc(s.k)}</span></div>
       <p class="tv-t tv-${s.qr ? "m" : size}">${esc(s.t)}</p>
       <div class="tv-bot"><div class="tv-left"><span class="tv-m">${esc(s.m)}</span>${TV.brand ? `<span class="tv-brand">${TV.brand.logo ? `<img src="${TV.brand.logo}" alt="">` : ""}<span>präsentiert von <b>${esc(TV.brand.name)}</b></span></span>` : ""}</div>
@@ -1324,14 +1363,115 @@
       <div class="tv-dots">${TV.slides.map((_, i) => `<i${i === TV.i % TV.slides.length ? ' class="on"' : ""}></i>`).join("")}</div>
     </div>`;
   }
+  window.addEventListener("resize", () => { if (TV.timer) drawTv(); });
   async function renderTv(token, r) {
     stopTv();
     $("#main").innerHTML = '<p class="loading">Lade Bildschirm-Modus …</p>';
-    await loadTv(r);
+    let opt = r;
+    if (r.code) {   // Kurzlink: Einstellungen aus der Datenbank holen
+      const cfg = LIVE ? await rpc("get_tv_screen", { p_code: r.code }).catch(() => null) : null;
+      if (stale(token)) return;
+      if (!cfg) { $("#main").innerHTML = `<div class="view"><p class="empty">Den Bildschirm-Code „${esc(r.code)}“ gibt es nicht.<br><a class="btn" href="#/bildschirm" style="margin-top:12px">Neuen Bildschirm-Link erstellen</a></p></div>`; document.body.classList.remove("tv-mode"); return; }
+      opt = tvOpts(new URLSearchParams(cfg));
+    }
+    TV.opt = opt;
+    await loadTv(opt);
     if (stale(token)) return;
     TV.i = 0; drawTv();
-    TV.timer = setInterval(() => { TV.i++; drawTv(); }, 12000);
-    TV.refresh = setInterval(() => loadTv(r).catch(() => {}), 10 * 60000);
+    TV.timer = setInterval(() => { TV.i++; drawTv(); }, opt.sec * 1000);
+    TV.refresh = setInterval(() => loadTv(opt).catch(() => {}), 10 * 60000);
+  }
+
+  /* ───────── Bildschirm-Link gestalten (#/bildschirm) ───────── */
+  const TV_PRESETS = [["Lachwerk", "ffc928", "15172a", "ffffff"], ["Nacht", "15172a", "ffc928", "ffffff"], ["Weiß & Blau", "f4f6fb", "1d4ed8", "ffffff"],
+    ["Rot", "d62828", "ffffff", "ffffff"], ["Grün", "1f7a4d", "ffffff", "ffffff"], ["Schwarz & Weiß", "111111", "ffffff", "ffffff"], ["Orange", "ff7a00", "1a1a1a", "ffffff"], ["Türkis", "0fb5ae", "0b2540", "ffffff"]];
+  const SCR = { cfg: null, timer: null };
+  function screenCfg() {
+    const c = SCR.cfg, out = {};
+    out.f = c.f; if (c.f === "hoch" && c.dreh) out.dreh = c.dreh;
+    if (c.bg !== "ffc928" || c.ac !== "15172a" || c.card !== "ffffff") { out.bg = c.bg; out.ac = c.ac; out.card = c.card; }
+    if (c.k.length) out.k = c.k.join(","); if (c.n) out.n = c.n.slice(0, 40); if (c.s) out.s = String(c.s); if (c.t !== 12) out.t = String(c.t);
+    return out;
+  }
+  const tvUrl = (cfg) => location.origin + location.pathname + "#/tv" + (Object.keys(cfg).length ? "?" + new URLSearchParams(cfg).toString() : "");
+  async function renderScreen(token, r) {
+    const q = r.q, o = tvOpts(q);
+    SCR.cfg = { f: o.format || "quer", dreh: o.rot || "", bg: (o.bg || "#ffc928").slice(1), ac: (o.ac || "#15172a").slice(1), card: (o.card || "#ffffff").slice(1), k: o.cats, n: o.name, s: o.sponsor, t: o.sec };
+    const c = SCR.cfg, sp = c.s && LIVE ? await API.sponsor(c.s).catch(() => null) : null;
+    if (stale(token)) return;
+    const color = (id, label, v) => `<label class="scr-color">${label}<span><input type="color" id="${id}C" value="#${v}"><input type="text" id="${id}" value="#${v}" maxlength="7" spellcheck="false" autocomplete="off" inputmode="text"></span></label>`;
+    $("#main").innerHTML = `<div class="view scr">
+      <div><h1>Bildschirm-Link</h1><p class="muted">Lachwerk für Fernseher, Stelen und Tablets: Witz des Tages, die besten Witze von heute und das Pointen-Battle im Wechsel, mit QR-Code zum Mitmachen. Einmal gestalten, Link am Bildschirm öffnen, fertig. Er aktualisiert sich von selbst.</p></div>
+      <div class="scr-grid">
+        <section class="panel form scr-form">
+          <fieldset class="scr-fmt"><legend>Format</legend>
+            <label><input type="radio" name="scrF" value="quer" ${c.f === "quer" ? "checked" : ""}><span><i class="scr-ic q"></i><b>Querformat 16:9</b><small>Fernseher, Monitor</small></span></label>
+            <label><input type="radio" name="scrF" value="hoch" ${c.f === "hoch" ? "checked" : ""}><span><i class="scr-ic h"></i><b>Hochformat 9:16</b><small>Stele, hochkant montierter Fernseher</small></span></label>
+          </fieldset>
+          <label id="scrRotBox" ${c.f === "hoch" ? "" : "hidden"}>Wie ist der Bildschirm montiert?<select id="scrRot">
+            <option value="">Gerät zeigt selbst hochkant an (Stele, Tablet)</option>
+            <option value="r" ${c.dreh === "r" ? "selected" : ""}>Fernseher um 90° nach rechts gedreht</option>
+            <option value="l" ${c.dreh === "l" ? "selected" : ""}>Fernseher um 90° nach links gedreht</option></select>
+            <small class="muted">Steht das Bild auf dem gedrehten Fernseher quer, einfach die andere Richtung wählen.</small></label>
+          <div class="scr-sec"><b>Farben (Firmen-CI)</b>
+            <div class="chips static scr-presets">${TV_PRESETS.map(([n, bg, ac, card]) => `<button type="button" class="chip scr-pre" data-scr-pre="${bg},${ac},${card}" title="${esc(n)}"><i style="background:#${bg};border-color:#${ac}"></i>${esc(n)}</button>`).join("")}</div>
+            <div class="scr-colors">${color("scrBg", "Hintergrund", c.bg)}${color("scrAc", "Akzent & Schrift", c.ac)}${color("scrCard", "Witz-Karte", c.card)}</div>
+            <p class="small muted">Hex-Codes aus dem Corporate Design einfach eintragen, z. B. #E30613.</p>
+            <p class="small scr-warn" id="scrWarn" hidden></p></div>
+          <label>Firmenname (optional)<input type="text" id="scrName" maxlength="40" value="${esc(c.n)}" placeholder="z. B. CityFit Lübeck" autocomplete="off"><small class="muted">Erscheint unten als „präsentiert von …“.</small></label>
+          ${sp ? `<p class="small">Mit Branding von Sponsor <b>${esc(sp.name)}</b>${sp.logo ? ` <img class="sp-mini" src="${sp.logo}" alt="">` : ""}.</p>` : ""}
+          <div class="scr-sec"><b>Nur bestimmte Kategorien (optional)</b>
+            <div class="chips static">${Object.entries(CATS).map(([k, l]) => `<label class="chip-check"><input type="checkbox" class="scrCat" value="${k}" ${c.k.includes(k) ? "checked" : ""}> ${l}</label>`).join("")}</div></div>
+          <label>Wechsel alle<select id="scrT">${[8, 12, 15, 20, 30].map((t) => `<option value="${t}" ${c.t === t ? "selected" : ""}>${t} Sekunden</option>`).join("")}</select></label>
+        </section>
+        <section class="scr-side">
+          <div class="scr-prev-wrap"><div class="scr-prev ${c.f}" id="scrPrev"><iframe id="scrFrame" title="Vorschau des Bildschirms" tabindex="-1"></iframe></div></div>
+          <div class="panel scr-out">
+            <b>Dein Link</b>
+            <p class="scr-short" id="scrShort" hidden></p>
+            <input type="text" id="scrUrl" readonly aria-label="Bildschirm-Link">
+            <div class="row"><button class="btn" data-scr-copy>Link kopieren</button><a class="btn ghost" id="scrOpen" target="_blank" rel="noopener">Öffnen</a>${LIVE ? '<button class="btn ghost" data-scr-short>Kurzlink zum Eintippen</button>' : ""}</div>
+            <p class="small muted">Tipp: Am Fernseher den Browser öffnen (z. B. Fire-TV-Stick mit „Silk“ oder den Browser des Smart-TV), Link eingeben und einmal auf das Bild tippen bzw. OK drücken für Vollbild. Der Kurzlink ist leichter mit der Fernbedienung einzutippen.</p>
+          </div>
+        </section>
+      </div>
+    </div>`;
+    updateScreen(true);
+  }
+  function readScreenForm() {
+    const c = SCR.cfg, hex = (id) => { const v = $("#" + id).value.trim().replace(/^#/, ""); return /^[0-9a-f]{6}$/i.test(v) ? v.toLowerCase() : /^[0-9a-f]{3}$/i.test(v) ? v.replace(/./g, "$&$&").toLowerCase() : null; };
+    c.f = (document.querySelector('input[name="scrF"]:checked') || {}).value || "quer";
+    c.dreh = $("#scrRot").value;
+    for (const [id, key] of [["scrBg", "bg"], ["scrAc", "ac"], ["scrCard", "card"]]) { const v = hex(id); if (v) { c[key] = v; $("#" + id + "C").value = "#" + v; } }
+    c.k = [...document.querySelectorAll(".scrCat:checked")].map((x) => x.value);
+    c.n = $("#scrName").value.trim(); c.t = Number($("#scrT").value) || 12;
+  }
+  function updateScreen(now) {
+    if (!$("#scrUrl")) return;
+    readScreenForm();
+    const c = SCR.cfg, cfg = screenCfg(), url = tvUrl(cfg);
+    $("#scrRotBox").hidden = c.f !== "hoch";
+    $("#scrUrl").value = url; $("#scrOpen").href = url;
+    $("#scrShort").hidden = true; SCR.short = null;
+    $("#scrPrev").className = "scr-prev " + c.f;
+    const w = contrast("#" + c.ac, "#" + c.bg) < 3 ? "Akzent und Hintergrund sind sich sehr ähnlich, das Logo und die Rubrik sind dann schlecht lesbar. Die Witze selbst bleiben lesbar." : "";
+    $("#scrWarn").textContent = w; $("#scrWarn").hidden = !w;
+    // Vorschau ohne Drehung, damit man das Ergebnis aufrecht sieht
+    const prev = { ...cfg }; delete prev.dreh;
+    clearTimeout(SCR.timer);
+    SCR.timer = setTimeout(() => { const f = $("#scrFrame"); if (f) f.src = tvUrl(prev); }, now ? 0 : 500);
+  }
+  async function screenShortLink() {
+    const btn = document.querySelector("[data-scr-short]"); if (btn) btn.disabled = true;
+    try {
+      const code = await rpc("save_tv_screen", { p_config: screenCfg() });
+      const url = location.origin + location.pathname.replace(/[^/]*$/, "") + "tv/" + code;
+      SCR.short = url;
+      $("#scrShort").innerHTML = `<span>${esc(url.replace(/^https?:\/\//, ""))}</span><small>Code: <b>${esc(code)}</b></small>`; $("#scrShort").hidden = false;
+      $("#scrUrl").value = url; $("#scrOpen").href = url;
+      navigator.clipboard && navigator.clipboard.writeText(url).then(() => toast("Kurzlink kopiert."), () => {});
+    } catch (e) { toast(errorText(e)); }
+    if (btn) btn.disabled = false;
   }
 
   /* ───────── Push-Nachrichten ───────── */
@@ -1463,7 +1603,7 @@
         <table class="tbl"><thead><tr><th>Tag</th><th>Aktivität</th><th>Besucher</th><th>Stimmen</th><th>Reakt.</th><th>Duelle</th><th>Witze</th><th>Konten</th></tr></thead><tbody>
         ${days.slice().reverse().map((d) => `<tr><td>${fmtShort(d.day)}</td><td class="bar"><i style="width:${Math.round(((d.votes + d.reactions + d.duels) / max) * 100)}%"></i></td><td>${d.voters}</td><td>${d.votes}</td><td>${d.reactions}</td><td>${d.duels}</td><td>${d.new_jokes}</td><td>${d.signups}</td></tr>`).join("")}
         </tbody></table>
-        <p class="muted small"><a href="#/tv">Bildschirm-Modus öffnen</a> · <a href="plakat.html" target="_blank" rel="noopener">QR-Plakat drucken</a></p>
+        <p class="muted small"><a href="#/bildschirm">Bildschirm-Link gestalten</a> · <a href="plakat.html" target="_blank" rel="noopener">QR-Plakat drucken</a></p>
         <p class="muted small">Besucher = verschiedene Geräte, die an dem Tag abgestimmt, reagiert oder ein Duell entschieden haben. Reine Leser werden nicht gezählt (kein Tracking).</p></section>
       <section class="panel"><h2>Kategorien</h2>
         <table class="tbl"><thead><tr><th>Kategorie</th><th>Witze</th><th>im Vorrat</th><th>Stimmen 7 Tage</th></tr></thead><tbody>
@@ -1539,7 +1679,7 @@
       <section class="panel"><h2>Letzte Aktivitäten</h2>
         ${act.length ? `<ul class="feed">${act.map((a) => `<li><span class="fi">${icon[a.kind] || "•"}</span><div><span class="fm">${a.who ? `<a href="#/u/${encodeURIComponent(a.who)}">@${esc(a.who)}</a>` : ""} ${what[a.kind] || a.kind} · ${ago(a.at)}</span>${a.body ? (a.kind === "joke" || a.kind === "report" ? `<a class="ft" href="#/witz/${a.ref}">${esc(a.body.split("\n")[0].slice(0, 90))}</a>` : `<span class="ft">${esc(a.body.slice(0, 90))}</span>`) : ""}</div></li>`).join("")}</ul>` : '<p class="muted small">Noch keine Aktivität von Nutzern.</p>'}
       </section>
-      <p class="muted small"><a href="#/tv">Bildschirm-Modus</a> · <a href="plakat.html" target="_blank" rel="noopener">QR-Plakat</a> · <a href="https://supabase.com/dashboard" target="_blank" rel="noopener">Supabase</a></p>`;
+      <p class="muted small"><a href="#/bildschirm">Bildschirm-Link</a> · <a href="plakat.html" target="_blank" rel="noopener">QR-Plakat</a> · <a href="https://supabase.com/dashboard" target="_blank" rel="noopener">Supabase</a></p>`;
   }
   const STATUS_LABEL = { visible: "Sichtbar", hidden: "Ausgeblendet", removed: "Entfernt", queued: "Geplant" };
   function drawAdminJokes() {
@@ -1609,7 +1749,7 @@
       </section>
       <section class="panel"><h2>Werkzeuge</h2>
         <ul class="facts">
-          <li><b>📺 Bildschirm-Modus</b><a href="#/tv">lachwerk.github.io/#/tv</a><span>Für Fernseher und Tablets, antippen für Vollbild.</span></li>
+          <li><b>📺 Bildschirm-Modus</b><a href="#/bildschirm">Bildschirm-Link gestalten</a><span>Quer- oder Hochformat, eigene Farben, Kurzlink zum Eintippen.</span></li>
           <li><b>🖨️ QR-Plakat</b><a href="plakat.html" target="_blank" rel="noopener">plakat.html</a><span>A4 zum Ausdrucken.</span></li>
           <li><b>🔑 Admin-Schlüssel ändern</b><span>Im Supabase SQL Editor: <code>select public.set_admin_key('neuer-schlüssel');</code></span></li>
         </ul></section>`;
@@ -1656,21 +1796,19 @@
             <div class="row"><button class="btn ghost" data-sp-edit="${x.id}">Bearbeiten</button><button class="btn danger" data-sp-del="${x.id}">Löschen</button>${x.placement === "tv" || x.active ? `<button class="btn ghost" data-tv-link data-sp="${x.id}">Bildschirm-Link</button>` : ""}</div></li>`; }).join("")}</ul>` : '<p class="muted small">Noch keine Sponsoren.</p>'}
       </section>
       <section class="panel form" id="tvLinkBox"><h2>Bildschirm-Link für eine Firma</h2>
-        <p class="muted small">Ein eigener Link für den Bildschirm-Modus: nur bestimmte Kategorien und auf Wunsch mit dem Logo eines laufenden Sponsors. Den Link einfach am Fernseher oder Tablet öffnen.</p>
+        <p class="muted small">Kategorien und auf Wunsch das Logo eines laufenden Sponsors wählen. Format, Farben und Kurzlink stellst du danach im Bildschirm-Gestalter ein.</p>
         <div class="chips static">${Object.entries(CATS).map(([k, l]) => `<label class="chip-check"><input type="checkbox" value="${k}"> ${l}</label>`).join("")}</div>
         <label>Mit Branding von<select id="tvSp"><option value="">ohne</option>${list.filter((x) => x.active).map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join("")}</select></label>
-        <div><button class="btn ghost" data-tv-link>Link erzeugen</button></div>
-        <p class="tv-link" id="tvLinkOut"></p>
+        <div><button class="btn ghost" data-tv-link>Im Bildschirm-Gestalter öffnen</button></div>
       </section>`;
   }
   function buildTvLink() {
     const box = $("#tvLinkBox"); if (!box) return;
     const cats = [...box.querySelectorAll("input[type=checkbox]:checked")].map((x) => x.value), sp = $("#tvSp").value;
     const q = new URLSearchParams(); if (cats.length) q.set("k", cats.join(",")); if (sp) q.set("s", sp);
-    const url = location.href.split("#")[0] + "#/tv" + (q.toString() ? "?" + q.toString() : "");
-    $("#tvLinkOut").innerHTML = `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a>`;
-    navigator.clipboard && navigator.clipboard.writeText(url).then(() => toast("Link kopiert."), () => {});
+    location.hash = "#/bildschirm" + (q.toString() ? "?" + q.toString() : "");
   }
+
   // Logo im Browser verkleinern (max. 400 × 160 Pixel), damit es klein in der Datenbank liegt
   function shrinkLogo(file) {
     return new Promise((resolve, reject) => {
@@ -1783,7 +1921,10 @@
       API.adminDeleteSponsor(S.adminKey, Number(d.spDel)).then(() => { toast("Sponsor gelöscht."); S.editSponsor = null; render(); }).catch((err) => toast(errorText(err)));
       return;
     }
-    if ("tvLink" in d) { if (d.sp && $("#tvSp")) { $("#tvSp").value = d.sp; $("#tvLinkBox").scrollIntoView({ behavior: "smooth" }); } buildTvLink(); return; }
+    if ("tvLink" in d) { if (d.sp && $("#tvSp")) $("#tvSp").value = d.sp; buildTvLink(); return; }
+    if ("scrPre" in d) { const [bg, ac, card] = d.scrPre.split(","); $("#scrBg").value = "#" + bg; $("#scrAc").value = "#" + ac; $("#scrCard").value = "#" + card; updateScreen(); return; }
+    if ("scrCopy" in d) { const u = $("#scrUrl").value; navigator.clipboard ? navigator.clipboard.writeText(u).then(() => toast("Link kopiert."), () => { $("#scrUrl").select(); }) : $("#scrUrl").select(); return; }
+    if ("scrShort" in d) { screenShortLink(); return; }
     if ("spLogoClear" in d) { S.spLogo = ""; $("#spLogoPrev").innerHTML = ""; return; }
     if ("annClear" in d) { API.adminSetAnnouncement(S.adminKey, "").then(() => { S.announcement = null; toast("Ankündigung entfernt."); render(); }).catch((err) => toast(errorText(err))); return; }
     if ("punchLogin" in d) { openAuth("login", "Zum Mitmachen beim Pointen-Battle brauchst du ein Konto. Abstimmen geht auch ohne.", "battle"); return; }
@@ -1937,6 +2078,12 @@
   $("#postBtn").addEventListener("click", () => openPost(false));
   $("#postCat").innerHTML = Object.entries(CATS).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
   $("#postText").addEventListener("input", checkSimilar);
+  // Bildschirm-Link: jede Änderung sofort in Link und Vorschau übernehmen
+  document.addEventListener("input", (e) => {
+    if (!e.target.closest || !e.target.closest(".scr-form")) return;
+    if (e.target.type === "color") $("#" + e.target.id.slice(0, -1)).value = e.target.value;
+    updateScreen();
+  });
   $("#postForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const text = $("#postText").value.trim(), cat = $("#postCat").value, err = $("#postErr");

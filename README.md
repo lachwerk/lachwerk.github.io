@@ -88,7 +88,7 @@ Für eine schon eingerichtete Datenbank einmal `erweiterung.sql` im SQL Editor a
 | Monats-Saison | `#/autoren` → Saison: Rangliste des Kalendermonats (mind. 10 Stimmen). Am Monatsersten wird der Witzbold des Monats gekrönt und bekommt ein Abzeichen. |
 | Lieblingsthemen | Beim Bewerten und im Duell lassen sich Kategorien wählen (im Browser gespeichert). |
 | Wortfilter | Witze und Pointen mit gesperrten Wörtern werden abgelehnt. Liste unter `#/admin` → Wortfilter, `wort*` sperrt alle Wörter, die so beginnen. |
-| Bildschirm-Modus | `#/tv` auf einem Fernseher/Tablet öffnen, antippen für Vollbild. Wechselt alle 12 Sekunden zwischen Witz des Tages, Top 5, Battle und QR-Code. |
+| Bildschirm-Modus | `#/bildschirm` öffnet den Gestalter: Querformat 16:9 oder Hochformat 9:16 (auch für gedreht montierte Fernseher), Firmenfarben (Hintergrund, Akzent, Karte), Firmenname, Kategorien und Wechselzeit, mit Live-Vorschau. Ergebnis ist ein Link `#/tv?f=hoch&bg=…&ac=…&card=…&n=…&k=…&t=…` oder ein Kurzlink `lachwerk.github.io/tv/CODE` (Erweiterung 7, `404.html` leitet um). Antippen für Vollbild. |
 | Plakat | `plakat.html`: A4-Plakat mit QR-Code zum Ausdrucken (Hintergrundgrafiken einschalten). |
 | WhatsApp-Kanal | Beim Witz des Tages auf der Witz-Seite: „Text für WhatsApp-Kanal kopieren“ und das Story-Bild dazu teilen. |
 
@@ -153,6 +153,7 @@ erweiterung3.sql  größerer Admin-Bereich, Nutzer sperren, Ankündigung, Export
 erweiterung4.sql  Sponsoren, Kontakt, weitere Admins
 erweiterung5.sql  Push-Nachrichten (dazu supabase/functions/push/index.ts)
 erweiterung6.sql  Konto selbst löschen, Pointen melden
+erweiterung7.sql  Kurzlinks für Bildschirme (lachwerk.github.io/tv/CODE)
 partner.html      Angebotsseite für Unternehmen
 plakat.html, qr.svg  Plakat mit QR-Code
 manifest.webmanifest, sw.js, icons/   installierbare App

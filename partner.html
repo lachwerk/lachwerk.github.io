@@ -8,7 +8,7 @@
   <meta name="theme-color" content="#ffc928">
   <link rel="canonical" href="https://lachwerk.github.io/partner.html">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="style.css?v=17">
+  <link rel="stylesheet" href="style.css?v=19">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Lachwerk für Unternehmen">
   <meta property="og:description" content="Witz des Tages auf Ihrem Bildschirm oder als Sponsor: lokal, werbearm, ohne Tracking.">
@@ -32,6 +32,7 @@
     .steps li { counter-increment: s; display: grid; grid-template-columns: 30px 1fr; gap: 8px; align-items: center; }
     .steps li::before { content: counter(s); width: 28px; height: 28px; border-radius: 50%; background: var(--ink); color: var(--yellow); display: grid; place-items: center; font: 800 .9rem var(--f-display); }
     .tv-demo { aspect-ratio: 16 / 9; width: 100%; border: 0; border-radius: 16px; box-shadow: var(--slab-sm); background: var(--yellow); }
+    .tv-links { display: flex; flex-wrap: wrap; gap: 8px; }
     .contact-box { display: grid; gap: 10px; justify-items: start; }
   </style>
 </head>
@@ -54,7 +55,12 @@
           <li><span>🔌</span><span><b>Keine Technik nötig</b><small>Ein Link im Browser genügt: Smart-TV, Fire-TV-Stick, Tablet oder PC. Aktualisiert sich von selbst.</small></span></li>
         </ul>
         <iframe class="tv-demo" src="./#/tv" title="Vorschau des Bildschirm-Modus" loading="lazy"></iframe>
-        <p class="small muted">Live-Vorschau. Vollbild-Ansicht: <a href="./#/tv" target="_blank" rel="noopener">Bildschirm-Modus öffnen</a></p>
+        <div class="tv-links">
+          <a class="btn" href="./#/bildschirm">Eigenen Bildschirm-Link gestalten</a>
+          <a class="btn ghost" href="./#/tv?f=quer" target="_blank" rel="noopener">Querformat 16:9 öffnen</a>
+          <a class="btn ghost" href="./#/tv?f=hoch" target="_blank" rel="noopener">Hochformat 9:16 öffnen</a>
+        </div>
+        <p class="small muted">Im Gestalter wählen Sie Format, Ihre Firmenfarben, Ihren Namen und passende Kategorien und erhalten einen kurzen Link zum Eintippen am Fernseher.</p>
       </section>
 
       <section class="p-sec">
