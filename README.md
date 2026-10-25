@@ -152,6 +152,7 @@ erweiterung2.sql  Pointen-Battle, Monats-Saison, Lieblingsthemen, Wortfilter
 erweiterung3.sql  größerer Admin-Bereich, Nutzer sperren, Ankündigung, Export
 erweiterung4.sql  Sponsoren, Kontakt, weitere Admins
 erweiterung5.sql  Push-Nachrichten (dazu supabase/functions/push/index.ts)
+erweiterung6.sql  Konto selbst löschen, Pointen melden
 partner.html      Angebotsseite für Unternehmen
 plakat.html, qr.svg  Plakat mit QR-Code
 manifest.webmanifest, sw.js, icons/   installierbare App

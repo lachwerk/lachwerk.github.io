@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-title" content="Lachwerk">
   <link rel="canonical" href="https://lachwerk.github.io/">
   <link rel="preconnect" href="https://yssqvkhmglwdxvjurxag.supabase.co" crossorigin>
-  <link rel="stylesheet" href="style.css?v=17">
+  <link rel="stylesheet" href="style.css?v=18">
   <!-- Vorschau beim Teilen (WhatsApp, Telegram …) -->
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://lachwerk.github.io/">
@@ -99,7 +99,7 @@
         <button type="button" class="btn ghost" data-close>Schließen</button>
         <button type="button" class="btn" id="logoutBtn">Abmelden</button>
       </div>
-      <p class="muted small">Konto löschen? Schreib uns über die Adresse im <a href="impressum.html">Impressum</a>.</p>
+      <div><button type="button" class="link" id="accountDelete">Konto löschen</button></div>
     </div>
   </div>
 
@@ -110,6 +110,17 @@
       <label>Noch einmal<input type="password" id="pwNew2" autocomplete="new-password" minlength="8"></label>
       <p class="err" id="pwErr"></p>
       <div class="row end"><button type="button" class="btn ghost" data-close>Abbrechen</button><button class="btn accent">Speichern</button></div>
+    </form>
+  </div>
+
+  <div class="scrim" id="deleteSheet" hidden>
+    <form class="sheet" id="deleteForm" novalidate>
+      <h2>Konto löschen?</h2>
+      <p class="muted small">Dein Konto, dein Benutzername und deine Benachrichtigungen werden endgültig gelöscht. Das lässt sich nicht rückgängig machen.</p>
+      <label class="check"><input type="checkbox" id="delContent"> <span>Auch alle meine Witze und Pointen löschen. Sonst bleiben sie als „Gelöschtes Konto“ erhalten.</span></label>
+      <label><span id="delHint">Zur Bestätigung gib deinen Benutzernamen ein</span><input type="text" id="delName" autocomplete="off"></label>
+      <p class="err" id="delErr"></p>
+      <div class="row end"><button type="button" class="btn ghost" data-close>Abbrechen</button><button class="btn danger">Endgültig löschen</button></div>
     </form>
   </div>
 
@@ -125,6 +136,6 @@
 
   <script src="config.js"></script>
   <script>/* Startwitze nur im Demo-Modus laden */ if (!(window.LACHWERK_CONFIG || {}).supabaseUrl) document.write('<script src="startwitze.js"><\/script>');</script>
-    <script src="app.js?v=17"></script>
+    <script src="app.js?v=18"></script>
 </body>
 </html>

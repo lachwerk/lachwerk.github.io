@@ -256,6 +256,10 @@
     async adminSaveSponsor(key, x) { return rpc("admin_save_sponsor", { p_key: key, p_id: x.id || null, p_name: x.name, p_claim: x.claim, p_url: x.url, p_logo: x.logo, p_placement: x.placement, p_starts: x.starts, p_ends: x.ends }); },
     async adminDeleteSponsor(key, id) { await rpc("admin_delete_sponsor", { p_key: key, p_id: id }); },
     async adminSetContact(key, email) { await rpc("admin_set_contact", { p_key: key, p_email: email }); },
+    async deleteAccount(withContent) { await rpc("delete_my_account", { p_with_content: !!withContent }); },
+    async reportPunch(id) { await rpc("report_punchline", { p_device: DEVICE, p_entry: id }); },
+    async adminApprovePunch(key, id) { await rpc("admin_approve_punchline", { p_key: key, p_entry: id }); },
+    async adminOpenPunch(key) { return rpc("admin_open_punch_reports", { p_key: key }); },
     async adminPushStats(key) { return (await rpc("admin_push_stats", { p_key: key }))[0]; },
     async adminSetRole(key, name, admin) { await rpc("admin_set_role", { p_key: key, p_username: name, p_admin: admin }); },
     async adminOverview(key) { return rpc("admin_overview", { p_key: key }); },
@@ -495,6 +499,10 @@
       adminSetContact() { return Promise.reject(fail("demo_only")); },
       adminSetRole() { return Promise.reject(fail("demo_only")); },
       adminPushStats() { return wait(null); },
+      async deleteAccount() { const a = store.get("demo_accounts", {}); delete a[(AUTH.email || "").toLowerCase()]; store.set("demo_accounts", a); },
+      reportPunch() { return wait(); },
+      adminApprovePunch() { return Promise.reject(fail("demo_only")); },
+      adminOpenPunch() { return wait(0); },
       adminOverview(key) { return key !== DEMO_ADMIN_KEY ? Promise.reject(fail("not_admin")) : Promise.reject(fail("demo_only")); },
       adminActivity() { return wait([]); },
       adminSearch(key) { return key !== DEMO_ADMIN_KEY ? Promise.reject(fail("not_admin")) : Promise.reject(fail("demo_only")); },
@@ -1237,6 +1245,8 @@
     drawBattle(c);
   }
   function drawBattle({ b, entries, archive }) {
+    const hidden = new Set(store.get("hidden_punch", []));
+    entries = entries.filter((e) => !hidden.has(e.id));
     S.battle = b; S.punch = entries;
     const end = new Date(); end.setHours(24, 0, 0, 0);
     const mine = entries.filter((e) => e.own).length;
@@ -1263,7 +1273,7 @@
       <div class="body"><p class="joke">${esc(e.text)}</p></div>
       <div class="foot"><button class="vote up" data-pvote="1" data-id="${e.id}" aria-pressed="${e.myVote === 1}" aria-label="Gute Pointe"${dis}>${ICON_UP}${fmt(e.up)}</button>
         <button class="vote down" data-pvote="-1" data-id="${e.id}" aria-pressed="${e.myVote === -1}" aria-label="Schwache Pointe"${dis}>${ICON_DOWN}${fmt(e.down)}</button>
-        <span class="score">${authorLink(e.author)}${e.own ? " · deine" : ""}</span></div></li>`;
+        <span class="score">${authorLink(e.author)}${e.own ? " · deine" : ` · <button class="link" data-report-punch="${e.id}">Melden</button>`}</span></div></li>`;
   }
   async function votePunch(id, value) {
     const e = S.punch.find((x) => x.id === id); if (!e || e.own) return;
@@ -1399,7 +1409,7 @@
     const v = S.adminView;
     let rows, extra;
     try {
-      if (v === "uebersicht") extra = await Promise.all([API.adminOverview(S.adminKey), API.adminActivity(S.adminKey), API.adminPushStats(S.adminKey).catch(() => null)]);
+      if (v === "uebersicht") extra = await Promise.all([API.adminOverview(S.adminKey), API.adminActivity(S.adminKey), API.adminPushStats(S.adminKey).catch(() => null), API.adminOpenPunch(S.adminKey).catch(() => 0)]);
       else if (v === "witze") extra = S.adminRows = await API.adminSearch(S.adminKey, S.adminQ).then((r) => (S.adminQ.offset ? [...(S.adminRowsPrev || []), ...r] : r));
       else if (v === "nutzer") extra = await API.adminUsers(S.adminKey, S.adminUserQ);
       else if (v === "settings") extra = await Promise.all([API.adminOverview(S.adminKey), API.contact().catch(() => null)]);
@@ -1478,7 +1488,7 @@
       </form>`;
   }
   function adminBattleHtml(rows) {
-    const pool = rows.filter((r) => r.kind === "prompt"), entries = rows.filter((r) => r.kind === "entry");
+    const pool = rows.filter((r) => r.kind === "prompt"), entries = rows.filter((r) => r.kind === "entry"), reported = rows.filter((r) => r.kind === "reported");
     return `<form class="panel form" id="promptForm">
         <h2>Witzanfänge für das Battle</h2>
         <p class="muted small">Noch ${pool.length} ${pool.length === 1 ? "Anfang" : "Anfänge"} im Vorrat, also Battles für ${pool.length} ${pool.length === 1 ? "Tag" : "Tage"}. Jeden Tag kommt automatisch der nächste dran.</p>
@@ -1487,6 +1497,7 @@
         <div><button class="btn">Hinzufügen</button></div>
         ${pool.length ? `<details><summary class="small">Vorrat ansehen</summary><ol class="small">${pool.map((p) => `<li>${esc(p.text1)}</li>`).join("")}</ol></details>` : ""}
       </form>
+      ${reported.length ? `<section class="panel"><h2>Gemeldete Pointen</h2><ul class="mod-list">${reported.map((e) => `<li class="mod-item st-hidden"><span class="muted small">@${esc(e.text2)} · ${ago(e.at)}</span><p class="txt">${esc(e.text1)}</p><div class="row"><button class="btn ghost" data-approve-punch="${e.id}">Freigeben</button><button class="btn danger" data-rm-punch="${e.id}">Entfernen</button></div></li>`).join("")}</ul></section>` : ""}
       <section class="panel"><h2>Neueste Pointen</h2>
         ${entries.length ? `<ul class="mod-list">${entries.map((e) => `<li class="mod-item"><span class="muted small">@${esc(e.text2)} · ${ago(e.at)}</span><p class="txt">${esc(e.text1)}</p><div><button class="btn danger" data-rm-punch="${e.id}">Entfernen</button></div></li>`).join("")}</ul>` : '<p class="muted small">Noch keine Pointen.</p>'}
       </section>`;
@@ -1501,7 +1512,7 @@
       </form>`;
   }
   const KPI = [["visitors", "Besucher"], ["votes", "Stimmen"], ["reactions", "Reaktionen"], ["duels", "Duelle"], ["jokes", "Neue Witze"], ["punchlines", "Pointen"], ["signups", "Registrierungen"], ["reports", "Meldungen"]];
-  function adminOverviewHtml(o, act, push) {
+  function adminOverviewHtml(o, act, push, punchReports) {
     const delta = (a, b) => { const d = a - b; return d === 0 ? '<span class="delta">±0</span>' : `<span class="delta ${d > 0 ? "up" : "down"}">${d > 0 ? "▲" : "▼"} ${Math.abs(d)}</span>`; };
     const days = o.queue_until ? Math.floor((new Date(o.queue_until) - Date.now()) / 864e5) : 0;
     const warn = (cond) => (cond ? " warn" : "");
@@ -1512,6 +1523,7 @@
         <p class="muted small">Besucher = verschiedene Geräte, die heute abgestimmt, reagiert oder ein Duell entschieden haben.</p></section>
       <div class="status-grid">
         <button class="status${warn(o.open_reports > 0)}" data-adminview="gemeldet"><b>${o.open_reports}</b><span>${o.open_reports === 1 ? "Witz" : "Witze"} zu prüfen</span></button>
+        ${punchReports ? `<button class="status warn" data-adminview="battle"><b>${punchReports}</b><span>${punchReports === 1 ? "Pointe" : "Pointen"} gemeldet</span></button>` : ""}
         <button class="status" data-adminview="nutzer"><b>${fmt(o.users)}</b><span>Konten${o.banned ? ` · ${o.banned} gesperrt` : ""}</span></button>
         <button class="status${warn(days < 7)}" data-adminview="vorrat"><b>${fmt(o.queued)}</b><span>im Vorrat${o.queue_until ? ` · reicht ${days} ${days === 1 ? "Tag" : "Tage"}` : " · leer"}</span></button>
         <button class="status${warn(o.battle_pool < 5)}" data-adminview="battle"><b>${o.battle_pool}</b><span>Battle-Anfänge übrig</span></button>
@@ -1716,7 +1728,7 @@
   function toast(m) { const t = $("#toast"); t.textContent = m; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (t.hidden = true), 2600); }
 
   /* ───────── Ereignisse ───────── */
-  let reportId = null;
+  let reportId = null, reportKind = "joke";
   document.addEventListener("click", (e) => {
     if (e.target.classList && e.target.classList.contains("scrim")) { closeSheets(); return; }
     if (e.target.closest && e.target.closest(".tv")) {
@@ -1783,7 +1795,9 @@
     if (d.chEdit) { S.editChallenge = (S.challenges || []).find((c) => c.id === Number(d.chEdit)) || null; render(); return; }
     if ("chNew" in d) { S.editChallenge = null; render(); return; }
     if (d.swipe !== undefined) { decide(Number(d.swipe)); return; }
-    if (d.report) { reportId = Number(d.report); openSheet("#reportSheet"); return; }
+    if (d.report) { reportId = Number(d.report); reportKind = "joke"; openSheet("#reportSheet"); return; }
+    if (d.reportPunch) { reportId = Number(d.reportPunch); reportKind = "punch"; openSheet("#reportSheet"); return; }
+    if (d.approvePunch) { t.disabled = true; API.adminApprovePunch(S.adminKey, Number(d.approvePunch)).then(() => { toast("Freigegeben."); render(); }).catch((err) => { t.disabled = false; toast(errorText(err)); }); return; }
     if ("post" in d) { openPost(false); return; }
     if ("shareImage" in d) { shareImage(); return; }
     if ("shareLink" in d) { shareLink(); return; }
@@ -1813,6 +1827,11 @@
   });
   $("#reportConfirm").addEventListener("click", async () => {
     const id = reportId; closeSheets();
+    if (reportKind === "punch") {
+      store.set("hidden_punch", [...store.get("hidden_punch", []), id].slice(-300));
+      try { await API.reportPunch(id); toast("Gemeldet. Danke!"); } catch (e) { toast(errorText(e)); }
+      battleCache = null; render(); return;
+    }
     S.hiddenForMe.add(id); store.set("hidden", [...S.hiddenForMe]);
     try { await API.report(id); toast("Gemeldet. Danke!"); } catch (e) { toast(errorText(e)); }
     S.rows = S.rows.filter((j) => j.id !== id);
@@ -1877,6 +1896,22 @@
       }
     } catch (ex) { err.textContent = errorText(ex); }
     finally { btn.disabled = false; btn.textContent = label; }
+  });
+  $("#accountDelete").addEventListener("click", () => {
+    closeSheets(); $("#delErr").textContent = ""; $("#delName").value = ""; $("#delContent").checked = false;
+    $("#delHint").textContent = `Zur Bestätigung gib deinen Benutzernamen ein: ${AUTH ? AUTH.username : ""}`;
+    openSheet("#deleteSheet");
+  });
+  $("#deleteForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!AUTH) { closeSheets(); return; }
+    if ($("#delName").value.trim().toLowerCase() !== (AUTH.username || "").toLowerCase()) { $("#delErr").textContent = "Der Benutzername stimmt nicht."; return; }
+    const btn = $("#deleteForm .btn.danger"); btn.disabled = true;
+    try {
+      await API.deleteAccount($("#delContent").checked);
+      setAuth(null); closeSheets(); toast("Dein Konto wurde gelöscht."); S.rows = []; location.hash = "#/"; render();
+    } catch (ex) { $("#delErr").textContent = errorText(ex); }
+    finally { btn.disabled = false; }
   });
   $("#logoutBtn").addEventListener("click", async () => { await AUTH_API.signOut(); closeSheets(); toast("Abgemeldet."); render(); });
   $("#accountPw").addEventListener("click", () => { closeSheets(); $("#pwErr").textContent = ""; openSheet("#pwSheet"); });
