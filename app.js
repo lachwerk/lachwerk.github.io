@@ -1707,7 +1707,7 @@
       format: ["hoch", "quer"].includes(get("f")) ? get("f") : null, rot: ["l", "r"].includes(get("dreh")) ? get("dreh") : null,
       bg: HEX6(get("bg")), ac: HEX6(get("ac")), card: HEX6(get("card")),
       name: get("n").slice(0, 40), sec: Math.min(60, Math.max(6, Number(get("t")) || 12)),
-      live: ["1", "2"].includes(get("live")) ? get("live") : null, group: get("g").replace(/[^0-9a-z]/gi, "").slice(0, 6).toUpperCase() || null,
+      live: ["1", "2"].includes(get("live")) ? get("live") : null, mot: get("mot") === "1", group: get("g").replace(/[^0-9a-z]/gi, "").slice(0, 6).toUpperCase() || null,
       preview: get("vorschau") === "1",
     };
   }
@@ -1723,6 +1723,20 @@
     const tx = contrast(ac, bg) >= 3 ? ac : bestOn(bg), ctx = contrast(ac, card) >= 4.5 ? ac : bestOn(card);
     return `--yellow:${bg};--ink:${ac};--paper:${card};--tv-tx:${tx};--tv-ctx:${ctx};--muted-on-yellow:${mixHex(tx, bg, 0.25)}`;
   }
+  // Motivationssprüche für Bildschirme in Studios (Option „mot=1“), bewusst positiv und ohne Diät- oder Körperdruck
+  const MOTIVATION = [
+    "Jeder Satz zählt. Auch der letzte.", "Der schwerste Teil des Trainings ist die Tür zum Studio. Den hast du schon geschafft.",
+    "Kleine Schritte sind auch Schritte.", "Du musst nicht perfekt sein. Du musst nur anfangen.", "Stark ist, wer weitermacht, auch wenn es keiner sieht.",
+    "Dein einziger Gegner ist dein Ich von gestern.", "Heute trainieren, morgen stolz sein.", "Muskelkater ist der Beweis, dass du gestern da warst.",
+    "Langsam ist auch eine Geschwindigkeit.", "Kein Training bereut man. Nur das, das man ausgelassen hat.", "Jeder Profi war mal Anfänger.",
+    "Atmen. Wasser trinken. Weiter geht's.", "Der Körper schafft mehr, als der Kopf glaubt.", "Fortschritt schlägt Perfektion.",
+    "Du bist heute näher dran als gestern.", "Motivation bringt dich hin. Gewohnheit hält dich dran.", "Gute Laune ist auch ein Muskel. Trainier ihn.",
+    "Lachen ist das beste Workout fürs Gesicht.", "Heute ist ein guter Tag für einen neuen Rekord. Oder wenigstens fürs Dabeisein.",
+    "Wer lacht, hält länger durch.", "Sei stolz auf jede Wiederholung.", "Erholung gehört zum Training. Schlaf heute gut.",
+    "Dein Körper hört alles, was dein Kopf sagt. Sag was Nettes.", "Stärker werden heißt: einmal öfter aufstehen als hinfallen.",
+    "Vergleich dich nicht. Verbessere dich.", "Pause machen ist erlaubt. Aufgeben nicht.", "Genau da, wo es anstrengend wird, wächst du.",
+    "Du bist hier. Das ist schon mehr als die Hälfte.", "Ein Training ist immer besser als kein Training.", "Schritt für Schritt. Satz für Satz. Tag für Tag.",
+  ];
   const TV = { timer: null, refresh: null, poll: null, clock: null, reveal: null, slides: [], i: 0, opt: {}, active: false, gen: 0, live: null, revealed: false };
   function stopTv() {
     TV.active = false; TV.gen++; TV.live = null;
@@ -1754,6 +1768,10 @@
     today.slice(0, group ? 3 : cats.length ? 8 : 5).forEach((j, i) => slides.push({ k: cats.length ? CATS[j.cat] : `Heute auf Platz ${i + 1}`, t: j.text, m: `@${j.author} · ${fmt(j.up)} Likes` }));
     if (quiz[0]) slides.splice(Math.min(2, slides.length), 0, { k: "🤔 Errate die Pointe", quiz: quizRow(quiz[0]), t: quiz[0].setup, m: "Auflösung gleich …" });
     if (battle) slides.push({ k: "🥊 Pointen-Battle von heute", t: battle.setup + (best ? "\n" + best.text : "\n… und deine Pointe?"), m: best ? "Führt gerade: @" + best.author : "Schreib die beste Pointe!" });
+    if (opt && opt.mot) {   // nach jeder zweiten Folie ein Motivationsspruch
+      const pool = MOTIVATION.slice().sort(() => Math.random() - 0.5);
+      for (let i = 2, n = 0; i <= slides.length; i += 3, n++) slides.splice(i, 0, { k: "💪 Motivation", t: pool[n % pool.length], m: "", mot: true });
+    }
     if (opt && opt.live === "1") slides.push({ live: true });
     else slides.push({ k: "Mach mit!", t: "Bewerte die Witze von heute und entscheide, wer Witz des Tages wird.", m: "lach-werk.de", qr: true });
     TV.slides = slides;
@@ -1783,7 +1801,7 @@
     const len = s.t.length, size = len > 160 ? "s" : len > 90 ? "m" : "l";
     const quiz = s.quiz ? `<div class="tv-quiz">${s.quiz.options.map((o, i) => `<span class="${i + 1 === s.quiz.correct ? "ok" : "no"}"><b>${"ABC"[i]}</b>${esc(o)}</span>`).join("")}</div>` : "";
     tvFrame(`<div class="tv-top"><span class="logo">Lach<span>werk</span>${seasonBadge()}</span><span class="tv-k">${esc(s.k)}</span></div>
-      <div class="tv-mid${s.quiz ? " has-quiz" : ""}"><p class="tv-t tv-${s.qr || s.quiz ? "m" : size}">${esc(s.t)}</p>${quiz}</div>
+      <div class="tv-mid${s.quiz ? " has-quiz" : ""}"><p class="tv-t tv-${s.qr || s.quiz ? "m" : size}${s.mot ? " tv-mot" : ""}">${esc(s.t)}</p>${quiz}</div>
       <div class="tv-bot"><div class="tv-left"><span class="tv-m">${esc(s.quiz && TV.revealed ? `Witz von @${s.quiz.author}` : s.m)}</span>${tvBrandHtml()}</div>
         <div class="tv-qr"><img src="qr.svg" alt="QR-Code zu lach-werk.de"><span>${s.quiz ? "Mehr Quiz: QR scannen" : "Jetzt mitbewerten"}</span></div></div>
       ${tvDots()}`, s.quiz && TV.revealed ? " reveal" : "");
@@ -1883,13 +1901,13 @@
     out.f = c.f; if (c.f === "hoch" && c.dreh) out.dreh = c.dreh;
     if (c.bg !== "ffc928" || c.ac !== "15172a" || c.card !== "ffffff") { out.bg = c.bg; out.ac = c.ac; out.card = c.card; }
     if (c.k.length) out.k = c.k.join(","); if (c.n) out.n = c.n.slice(0, 40); if (c.s) out.s = String(c.s); if (c.t !== 12) out.t = String(c.t);
-    if (c.live) out.live = c.live; if (c.g) out.g = c.g;
+    if (c.live) out.live = c.live; if (c.g) out.g = c.g; if (c.mot) out.mot = "1";
     return out;
   }
   const tvUrl = (cfg) => location.origin + location.pathname + "#/tv" + (Object.keys(cfg).length ? "?" + new URLSearchParams(cfg).toString() : "");
   async function renderScreen(token, r) {
     const q = r.q, o = tvOpts(q);
-    SCR.cfg = { f: o.format || "quer", dreh: o.rot || "", bg: (o.bg || "#ffc928").slice(1), ac: (o.ac || "#15172a").slice(1), card: (o.card || "#ffffff").slice(1), k: o.cats, n: o.name, s: o.sponsor, t: o.sec, live: o.live || "", g: o.group || "" };
+    SCR.cfg = { f: o.format || "quer", dreh: o.rot || "", bg: (o.bg || "#ffc928").slice(1), ac: (o.ac || "#15172a").slice(1), card: (o.card || "#ffffff").slice(1), k: o.cats, n: o.name, s: o.sponsor, t: o.sec, live: o.live || "", g: o.group || "", mot: o.mot };
     const c = SCR.cfg, sp = c.s && LIVE ? await API.sponsor(c.s).catch(() => null) : null;
     if (stale(token)) return;
     const color = (id, label, v) => `<label class="scr-color">${label}<span><input type="color" id="${id}C" value="#${v}"><input type="text" id="${id}" value="#${v}" maxlength="7" spellcheck="false" autocomplete="off" inputmode="text"></span></label>`;
@@ -1915,6 +1933,7 @@
           ${sp ? `<p class="small">Mit Branding von Sponsor <b>${esc(sp.name)}</b>${sp.logo ? ` <img class="sp-mini" src="${sp.logo}" alt="">` : ""}.</p>` : ""}
           <div class="scr-sec"><b>Nur bestimmte Kategorien (optional)</b>
             <div class="chips static">${Object.entries(CATS).map(([k, l]) => `<label class="chip-check"><input type="checkbox" class="scrCat" value="${k}" ${c.k.includes(k) ? "checked" : ""}> ${l}</label>`).join("")}</div></div>
+          <label class="check scr-check"><input type="checkbox" id="scrMot" ${c.mot ? "checked" : ""}> <span><b>💪 Motivationssprüche zwischendurch</b><br><small class="muted">Nach jeder zweiten Folie ein kurzer, positiver Spruch, z. B. „Jeder Satz zählt. Auch der letzte.“ Ideal fürs Fitnessstudio.</small></span></label>
           <label>⚡ Live-Duell<select id="scrLive">
             <option value="">Aus</option>
             <option value="1" ${c.live === "1" ? "selected" : ""}>Im Wechsel mit den Witzen</option>
@@ -1945,7 +1964,7 @@
     for (const [id, key] of [["scrBg", "bg"], ["scrAc", "ac"], ["scrCard", "card"]]) { const v = hex(id); if (v) { c[key] = v; $("#" + id + "C").value = "#" + v; } }
     c.k = [...document.querySelectorAll(".scrCat:checked")].map((x) => x.value);
     c.n = $("#scrName").value.trim(); c.t = Number($("#scrT").value) || 12;
-    c.live = $("#scrLive").value; c.g = $("#scrGroup").value.replace(/[^0-9a-z]/gi, "").slice(0, 6).toUpperCase();
+    c.mot = $("#scrMot").checked; c.live = $("#scrLive").value; c.g = $("#scrGroup").value.replace(/[^0-9a-z]/gi, "").slice(0, 6).toUpperCase();
   }
   function updateScreen(now) {
     if (!$("#scrUrl")) return;

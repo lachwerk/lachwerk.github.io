@@ -390,6 +390,9 @@ body.tv-mode { padding: 0; overflow: hidden; }
 .tv.hoch .tv-l { font-size: calc(4 * var(--vh)); } .tv.hoch .tv-m { font-size: calc(3.4 * var(--vh)); } .tv.hoch .tv-s { font-size: calc(2.7 * var(--vh)); } .tv.hoch .tv-k { font-size: calc(2.2 * var(--vh)); }
 .tv.hoch .tv-top { flex-direction: column; align-items: flex-start; gap: calc(2 * var(--vh)); } .tv.hoch .tv-k { text-align: left; padding: calc(.8 * var(--vh)) calc(3 * var(--vw)); }
 .tv.hoch .tv-bot .tv-m { font-size: calc(2.2 * var(--vh)); } .tv.hoch .tv-qr img { width: calc(12 * var(--vh)); height: calc(12 * var(--vh)); }
+.tv-t.tv-mot { text-align: center; font-weight: 800; font-family: var(--f-display); background: var(--ink); color: var(--yellow); box-shadow: 0 calc(1.4 * var(--vh)) 0 var(--paper); }
+.scr-check { display: flex !important; gap: 8px; align-items: flex-start; }
+.scr-check input { margin-top: 4px; }
 .tv.fix { inset: auto; transform-origin: center; }
 body.tv-mode { background: var(--yellow); min-height: 100vh; }
 
