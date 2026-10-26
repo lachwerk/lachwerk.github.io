@@ -1626,7 +1626,7 @@
       ${AUTH ? `${mine.length ? `<section class="hl-sec"><h2>Deine Gruppen</h2><ul class="grp-list">${mine.map((g) => `<li><a href="#/gruppe/${g.code}"><b>${esc(g.name)}</b><span>${fmt(g.members)} ${g.members === 1 ? "Mitglied" : "Mitglieder"}${g.is_owner ? " · von dir gegründet" : ""}</span></a></li>`).join("")}</ul></section>` : ""}
         <div class="grp-forms">
           <form class="panel form" id="groupCreate"><h2>Gruppe gründen</h2>
-            <label>Name der Gruppe<input type="text" id="groupName" maxlength="40" placeholder="z. B. CityFit Lübeck" required autocomplete="off"></label>
+            <label>Name der Gruppe<input type="text" id="groupName" maxlength="40" placeholder="z. B. Kollegen vom 3. Stock" required autocomplete="off"></label>
             <button class="btn">Gründen</button><p class="err small" id="groupCreateErr"></p></form>
           <form class="panel form" id="groupJoin"><h2>Gruppe beitreten</h2>
             <label>Einladungscode<input type="text" id="groupCode" maxlength="6" placeholder="z. B. K7P2QX" required autocomplete="off" autocapitalize="characters" spellcheck="false"></label>
@@ -1929,7 +1929,7 @@
             <div class="scr-colors">${color("scrBg", "Hintergrund", c.bg)}${color("scrAc", "Akzent & Schrift", c.ac)}${color("scrCard", "Witz-Karte", c.card)}</div>
             <p class="small muted">Hex-Codes aus dem Corporate Design einfach eintragen, z. B. #E30613.</p>
             <p class="small scr-warn" id="scrWarn" hidden></p></div>
-          <label>Firmenname (optional)<input type="text" id="scrName" maxlength="40" value="${esc(c.n)}" placeholder="z. B. CityFit Lübeck" autocomplete="off"><small class="muted">Erscheint unten als „präsentiert von …“.</small></label>
+          <label>Firmenname (optional)<input type="text" id="scrName" maxlength="40" value="${esc(c.n)}" placeholder="z. B. Bäckerei Sonnenschein" autocomplete="off"><small class="muted">Erscheint unten als „präsentiert von …“.</small></label>
           ${sp ? `<p class="small">Mit Branding von Sponsor <b>${esc(sp.name)}</b>${sp.logo ? ` <img class="sp-mini" src="${sp.logo}" alt="">` : ""}.</p>` : ""}
           <div class="scr-sec"><b>Nur bestimmte Kategorien (optional)</b>
             <div class="chips static">${Object.entries(CATS).map(([k, l]) => `<label class="chip-check"><input type="checkbox" class="scrCat" value="${k}" ${c.k.includes(k) ? "checked" : ""}> ${l}</label>`).join("")}</div></div>
