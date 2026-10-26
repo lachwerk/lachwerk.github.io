@@ -152,6 +152,7 @@
     battle_closed: "Dieses Battle ist schon vorbei. Schau dir das heutige an!",
     battle_limit: "Du hast heute schon 3 Pointen eingereicht. Morgen gibt es ein neues Battle.",
     duplicate_punchline: "Genau diese Pointe gibt es schon.",
+    duplicate: "Diesen oder einen sehr ähnlichen Witz gibt es schon.",
     invalid_punchline: "Eine Pointe braucht 2 bis 200 Zeichen.",
     banned: "Dein Konto ist gesperrt. Bei Fragen schreib uns über die Adresse im Impressum.",
     user_not_found: "Diesen Nutzer gibt es nicht.",
@@ -333,6 +334,15 @@
     async adminSearch(key, q) { return rpc("admin_search_jokes", { p_key: key, p_query: q.q || null, p_category: q.cat || null, p_status: q.status || null, p_author: q.author || null, p_limit: 30, p_offset: q.offset || 0 }); },
     async adminUpdateJoke(key, id, body, cat) { await rpc("admin_update_joke", { p_key: key, p_id: id, p_body: body, p_category: cat }); },
     async adminUsers(key, q) { return rpc("admin_users", { p_key: key, p_query: q || null, p_limit: 200 }); },
+    async adminUsers2(key, q) { return rpc("admin_users2", { p_key: key, p_query: q || null, p_limit: 1000 }); },
+    async adminDashboard(key) { return rpc("admin_dashboard", { p_key: key }); },
+    async adminSecurity(key) { return rpc("admin_security", { p_key: key }); },
+    async adminLog(key, limit, offset, target) { return rpc("admin_log_list", { p_key: key, p_limit: limit, p_offset: offset || 0, p_target: target || null }); },
+    async adminUserDetail(key, name) { return rpc("admin_user_detail", { p_key: key, p_username: name }); },
+    async adminSetNote(key, name, note) { await rpc("admin_set_note", { p_key: key, p_username: name, p_note: note }); },
+    async adminBulkStatus(key, ids, status) { return rpc("admin_bulk_status", { p_key: key, p_ids: ids, p_status: status }); },
+    async adminBulkCategory(key, ids, cat) { return rpc("admin_bulk_category", { p_key: key, p_ids: ids, p_category: cat }); },
+    async adminPostJoke(key, cat, body, mode, at) { return rpc("admin_post_joke", { p_key: key, p_category: cat, p_body: body, p_mode: mode, p_at: at || null }); },
     async adminBan(key, name, ban, reason) { await rpc("admin_ban_user", { p_key: key, p_username: name, p_ban: ban, p_reason: reason || null }); },
     async adminRemoveUserContent(key, name) { return rpc("admin_remove_user_content", { p_key: key, p_username: name }); },
     async adminTop(key) { return rpc("admin_top", { p_key: key }); },
@@ -574,6 +584,11 @@
       adminSearch(key) { return key !== DEMO_ADMIN_KEY ? Promise.reject(fail("not_admin")) : Promise.reject(fail("demo_only")); },
       adminUpdateJoke() { return Promise.reject(fail("demo_only")); },
       adminUsers(key) { return key !== DEMO_ADMIN_KEY ? Promise.reject(fail("not_admin")) : Promise.reject(fail("demo_only")); },
+      adminUsers2(key) { return this.adminUsers(key); },
+      adminDashboard() { return wait(null); }, adminSecurity() { return wait(null); }, adminLog() { return wait([]); },
+      adminUserDetail() { return Promise.reject(fail("demo_only")); }, adminSetNote() { return Promise.reject(fail("demo_only")); },
+      adminBulkStatus() { return Promise.reject(fail("demo_only")); }, adminBulkCategory() { return Promise.reject(fail("demo_only")); },
+      adminPostJoke() { return Promise.reject(fail("demo_only")); },
       adminBan() { return Promise.reject(fail("demo_only")); },
       adminRemoveUserContent() { return Promise.reject(fail("demo_only")); },
       adminTop() { return wait([]); },
@@ -2215,9 +2230,12 @@
     const v = S.adminView;
     let rows, extra;
     try {
-      if (v === "uebersicht") extra = await Promise.all([API.adminOverview(S.adminKey), API.adminActivity(S.adminKey), API.adminPushStats(S.adminKey).catch(() => null), API.adminOpenPunch(S.adminKey).catch(() => 0)]);
+      if (v === "uebersicht") extra = await Promise.all([API.adminOverview(S.adminKey), API.adminActivity(S.adminKey), API.adminPushStats(S.adminKey).catch(() => null), API.adminOpenPunch(S.adminKey).catch(() => 0),
+        API.adminDashboard(S.adminKey).catch(() => null), API.adminSecurity(S.adminKey).catch(() => null)]);
+      else if (v === "nutzer" && S.adminUser) extra = await API.adminUserDetail(S.adminKey, S.adminUser);
+      else if (v === "protokoll") extra = await Promise.all([API.adminSecurity(S.adminKey).catch(() => null), API.adminLog(S.adminKey, S.logLimit || 50, 0).catch(() => [])]);
       else if (v === "witze") extra = S.adminRows = await API.adminSearch(S.adminKey, S.adminQ).then((r) => (S.adminQ.offset ? [...(S.adminRowsPrev || []), ...r] : r));
-      else if (v === "nutzer") extra = await API.adminUsers(S.adminKey, S.adminUserQ);
+      else if (v === "nutzer") extra = await API.adminUsers2(S.adminKey, S.adminUserQ).catch(() => API.adminUsers(S.adminKey, S.adminUserQ));
       else if (v === "settings") extra = await Promise.all([API.adminOverview(S.adminKey), API.contact().catch(() => null)]);
       else if (v === "sponsoren") extra = await API.adminSponsors(S.adminKey);
       else if (v === "stats") extra = await Promise.all([API.adminTotals(S.adminKey), API.adminStats(S.adminKey, 14), API.adminCatStats(S.adminKey), API.adminTop(S.adminKey).catch(() => []),
@@ -2233,10 +2251,12 @@
     const label = { visible: "Sichtbar", hidden: "Ausgeblendet", removed: "Entfernt" };
     const head = `<div class="row" style="justify-content:space-between;align-items:center"><h1>Moderation</h1>${S.adminKey ? '<button class="link" data-admin-logout>Abmelden</button>' : `<span class="muted small on-y">als Admin @${esc(AUTH.username)}</span>`}</div>
       <div class="tabs admin-tabs" role="tablist">
-        ${[["uebersicht", "Übersicht"], ["gemeldet", "Zu prüfen"], ["witze", "Witze"], ["nutzer", "Nutzer"], ["stats", "Statistik"], ["vorrat", "Vorrat"], ["challenge", "Challenge"], ["filter", "Wortfilter"], ["sponsoren", "Sponsoren"], ["settings", "Einstellungen"]].map(([k, l]) => `<button role="tab" data-adminview="${k}" aria-selected="${v === k}">${l}</button>`).join("")}
+        ${[["uebersicht", "Übersicht"], ["gemeldet", "Zu prüfen"], ["witze", "Witze"], ["nutzer", "Nutzer"], ["stats", "Statistik"], ["protokoll", "Protokoll"], ["vorrat", "Vorrat"], ["challenge", "Challenge"], ["filter", "Wortfilter"], ["sponsoren", "Sponsoren"], ["settings", "Einstellungen"]].map(([k, l]) => `<button role="tab" data-adminview="${k}" aria-selected="${v === k}">${l}</button>`).join("")}
       </div>`;
     S.adminHead = head;
-    if (v === "uebersicht") { $("#main").innerHTML = `<div class="view">${head}${adminOverviewHtml(...extra)}</div>`; return; }
+    if (v === "uebersicht") { S.dash = extra[4]; $("#main").innerHTML = `<div class="view">${head}${adminOverviewHtml(...extra)}</div>`; return; }
+    if (v === "nutzer" && S.adminUser) { $("#main").innerHTML = `<div class="view">${head}${adminUserDetailHtml(extra)}</div>`; return; }
+    if (v === "protokoll") { $("#main").innerHTML = `<div class="view">${head}${adminProtocolHtml(...extra)}</div>`; return; }
     if (v === "witze") { S.adminRowsPrev = S.adminRows; drawAdminJokes(); return; }
     if (v === "nutzer") { $("#main").innerHTML = `<div class="view">${head}${adminUsersHtml(extra)}${await adminGroupsHtml()}</div>`; return; }
     if (v === "settings") { $("#main").innerHTML = `<div class="view">${head}${adminSettingsHtml(...extra)}</div>`; return; }
@@ -2341,7 +2361,7 @@
       </form>`;
   }
   const KPI = [["visitors", "Besucher"], ["votes", "Stimmen"], ["reactions", "Reaktionen"], ["duels", "Duelle"], ["jokes", "Neue Witze"], ["signups", "Registrierungen"], ["reports", "Meldungen"]];
-  function adminOverviewHtml(o, act, push, punchReports) {
+  function adminOverviewHtml(o, act, push, punchReports, dash, sec) {
     const delta = (a, b) => { const d = a - b; return d === 0 ? '<span class="delta">±0</span>' : `<span class="delta ${d > 0 ? "up" : "down"}">${d > 0 ? "▲" : "▼"} ${Math.abs(d)}</span>`; };
     const days = o.queue_until ? Math.floor((new Date(o.queue_until) - Date.now()) / 864e5) : 0;
     const warn = (cond) => (cond ? " warn" : "");
@@ -2350,13 +2370,14 @@
     return `<section class="panel"><h2>Heute <span class="muted small">(im Vergleich zu gestern)</span></h2>
         <div class="kpis">${KPI.map(([k, l]) => `<div><b>${fmt(o.today[k])}</b><span>${l}</span>${delta(o.today[k], o.yesterday[k])}</div>`).join("")}</div>
         <p class="muted small">Besucher = verschiedene Geräte, die heute abgestimmt, reagiert oder ein Duell entschieden haben.</p></section>
+      ${adminDashHtml(dash, sec)}
       <div class="status-grid">
         <button class="status${warn(o.open_reports > 0)}" data-adminview="gemeldet"><b>${o.open_reports}</b><span>${o.open_reports === 1 ? "Witz" : "Witze"} zu prüfen</span></button>
         ${false && punchReports ? `<button class="status warn" data-adminview="battle"><b>${punchReports}</b><span>${punchReports === 1 ? "Pointe" : "Pointen"} gemeldet</span></button>` : ""}
         <button class="status" data-adminview="nutzer"><b>${fmt(o.users)}</b><span>Konten${o.banned ? ` · ${o.banned} gesperrt` : ""}</span></button>
         <button class="status${warn(days < 7)}" data-adminview="vorrat"><b>${fmt(o.queued)}</b><span>im Vorrat${o.queue_until ? ` · reicht ${days} ${days === 1 ? "Tag" : "Tage"}` : " · leer"}</span></button>
-        <button class="status${warn(o.battle_pool < 5)}" data-adminview="battle"><b>${o.battle_pool}</b><span>Battle-Anfänge übrig</span></button>
-        ${push ? `<div class="status"><b>${fmt(push.subs)}</b><span>Push-Abos · ${push.daily} Witz des Tages · ${push.battle} Battle${push.last_daily ? " · zuletzt " + fmtShort(push.last_daily) : ""}</span></div>` : ""}
+        <button class="status" data-adminview="protokoll"><b>📋</b><span>Protokoll & Sicherheit</span></button>
+        ${push ? `<div class="status"><b>${fmt(push.subs)}</b><span>Push-Abos · ${push.daily} mit Witz des Tages${push.last_daily ? " · zuletzt " + fmtShort(push.last_daily) : ""}</span></div>` : ""}
       </div>
       <section class="panel"><h2>Gerade läuft</h2>
         <ul class="facts">
@@ -2370,10 +2391,164 @@
       <p class="muted small"><a href="#/bildschirm">Bildschirm-Link</a> · <a href="plakat.html" target="_blank" rel="noopener">QR-Plakat</a> · <a href="https://supabase.com/dashboard" target="_blank" rel="noopener">Supabase</a></p>`;
   }
   const STATUS_LABEL = { visible: "Sichtbar", hidden: "Ausgeblendet", removed: "Entfernt", queued: "Geplant" };
+  /* ───────── Admin: Dashboard, Protokoll, Nutzer-Details ───────── */
+  const DASH_METRICS = [["visitors", "Besucher"], ["voters", "Bewerter"], ["votes", "Stimmen"], ["jokes", "Neue Witze"], ["signups", "Neue Konten"], ["reports", "Meldungen"]];
+  function pctDelta(a, b, invert) {
+    if (!b) return a ? `<span class="delta ${invert ? "down" : "up"}">neu</span>` : '<span class="delta">±0</span>';
+    const p = Math.round(((a - b) / b) * 100);
+    if (p === 0) return '<span class="delta">±0 %</span>';
+    return `<span class="delta ${(p > 0) !== !!invert ? "up" : "down"}">${p > 0 ? "▲" : "▼"} ${Math.abs(p)} %</span>`;
+  }
+  function secWarnings(s) {
+    if (!s) return [];
+    const w = [];
+    (s.flood_users || []).forEach((u) => w.push(`@${u.username} hat in 24 Std. ${u.n} Witze gepostet.`));
+    (s.flood_devices || []).forEach((x) => w.push(`Ein Gerät (${x.dev}…) hat in 24 Std. ${fmt(x.n)} Stimmen abgegeben.`));
+    if (s.flood_ips) w.push(`${s.flood_ips} Internet-${s.flood_ips === 1 ? "Anschluss hat" : "Anschlüsse haben"} in 24 Std. über 400 Stimmen abgegeben.`);
+    (s.reported_users || []).forEach((u) => w.push(`Witze von @${u.username} wurden in 7 Tagen ${u.n}× gemeldet.`));
+    (s.shared_devices || []).forEach((x) => w.push(`Mehrere Konten posten vom selben Gerät: ${x.names}.`));
+    if (s.signups_24h >= 20) w.push(`${s.signups_24h} neue Konten in 24 Std.`);
+    return w;
+  }
+  function dashChartHtml(d) {
+    const days = d.days, m = S.dashMetric || "visitors", max = Math.max(1, ...days.map((x) => x[m])), tot = days.reduce((a, x) => a + x[m], 0);
+    return `<div class="spark" role="img" aria-label="${esc((DASH_METRICS.find((x) => x[0] === m) || [0, ""])[1])} der letzten 30 Tage">${days.map((x) => `<i style="height:${Math.max(2, Math.round((x[m] / max) * 100))}%" title="${fmtShort(x.day)}: ${fmt(x[m])}"></i>`).join("")}</div>
+      <div class="spark-axis"><span>${fmtShort(days[0].day)}</span><span>Summe ${fmt(tot)} · Spitze ${fmt(max)}</span><span>heute</span></div>`;
+  }
+  function adminDashHtml(d, sec) {
+    const warns = secWarnings(sec);
+    const warnBox = warns.length ? `<button class="panel warn-box" data-adminview="protokoll"><b>⚠️ ${warns.length} ${warns.length === 1 ? "Hinweis" : "Hinweise"} zur Sicherheit</b><span>${esc(warns[0])}${warns.length > 1 ? " Mehr im Protokoll ›" : ""}</span></button>` : "";
+    if (!d || !d.days) return warnBox;
+    const days = d.days, last7 = days.slice(-7), prev7 = days.slice(-14, -7);
+    const sum = (a, k) => a.reduce((s, x) => s + (x[k] || 0), 0);
+    const m = S.dashMetric || "visitors", f = d.funnel, fmax = Math.max(1, f.visitors, f.voters, f.signups, f.posters);
+    const hours = d.hours || [], hmax = Math.max(1, ...hours);
+    return `${warnBox}
+      <section class="panel"><h2>Letzte 7 Tage <span class="muted small">(im Vergleich zur Woche davor)</span></h2>
+        <div class="kpis">${DASH_METRICS.map(([k, l]) => `<div><b>${fmt(sum(last7, k))}</b><span>${l}</span>${pctDelta(sum(last7, k), sum(prev7, k), k === "reports")}</div>`).join("")}</div></section>
+      <section class="panel"><h2>Verlauf 30 Tage</h2>
+        <div class="chips static dash-chips">${DASH_METRICS.map(([k, l]) => `<button class="chip" data-dash-metric="${k}" aria-pressed="${k === m}">${l}</button>`).join("")}</div>
+        <div id="dashChart">${dashChartHtml(d)}</div></section>
+      <section class="panel"><h2>Vom Besuch zum Beitrag <span class="muted small">(7 Tage)</span></h2>
+        <ul class="funnel">${[[f.visitors, "Besucher"], [f.voters, "haben bewertet"], [f.signups, "neue Konten"], [f.posters, "haben gepostet"]].map(([n, l], i) => `<li><span>${l}</span><i style="width:${Math.max(2, Math.round((n / fmax) * 100))}%"></i><b>${fmt(n)}${i && f.visitors >= f.voters ? ` <small>${Math.round((n / f.visitors) * 100)} %</small>` : ""}</b></li>`).join("")}</ul>
+        <p class="muted small">👍-Anteil aller Stimmen: ${d.like_rate ?? "–"} % · Ø ${d.votes_per_joke ?? "–"} Stimmen pro neuem Witz · aktive Autoren: ${d.authors_7} in 7 Tagen, ${d.authors_30} in 30 Tagen</p></section>
+      <section class="panel"><h2>Stimmen der letzten 24 Stunden</h2>
+        <div class="spark hours">${hours.map((n, i) => `<i style="height:${Math.max(2, Math.round((n / hmax) * 100))}%" title="vor ${23 - i} Std.: ${n}"></i>`).join("")}</div>
+        <div class="spark-axis"><span>vor 24 Std.</span><span>${fmt(hours.reduce((a, b) => a + b, 0))} Stimmen</span><span>jetzt</span></div></section>
+      <section class="panel"><h2>Top-Autoren <span class="muted small">(Stimmen der letzten 30 Tage)</span></h2>
+        ${(d.top_authors || []).length ? `<ol class="top-list">${d.top_authors.map((a) => `<li><button class="link" data-admin-user="${esc(a.username)}">@${esc(a.username)}</button><span>${fmt(a.likes)} 👍 · ${fmt(a.dislikes)} 👎 · ${a.jokes} ${a.jokes === 1 ? "Witz" : "Witze"}</span></li>`).join("")}</ol>` : '<p class="muted small">Noch keine Stimmen für Witze von Nutzern.</p>'}
+        ${(d.top_cats || []).length ? `<p class="muted small">Meiste Stimmen in 7 Tagen: ${d.top_cats.map((c) => `${esc(c.name)} (${fmt(c.votes)})`).join(" · ")}</p>` : ""}</section>`;
+  }
+  const LOG_TEXT = {
+    joke_hide: ["🙈", "hat ausgeblendet:"], joke_remove: ["🗑️", "hat entfernt:"], joke_restore: ["✅", "hat freigegeben:"], reports_clear: ["🧹", "hat Meldungen verworfen:"],
+    joke_edit: ["✏️", "hat bearbeitet:"], joke_category: ["🏷️", "hat die Kategorie geändert:"], joke_add: ["➕", "hat {w} veröffentlicht"], joke_plan: ["🗓️", "hat {w} eingeplant"],
+    user_ban: ["⛔", "hat gesperrt:"], user_unban: ["🔓", "hat entsperrt:"], role_on: ["⭐", "hat zum Admin gemacht:"], role_off: ["⭐", "hat Admin-Rechte entzogen:"],
+    user_note: ["📝", "hat eine Notiz geschrieben zu"], words_save: ["🔤", "hat den Wortfilter gespeichert"], announcement: ["📣", "hat die Ankündigung geändert"],
+    contact: ["✉️", "hat die Kontakt-E-Mail geändert"], challenge_save: ["🏋️", "hat eine Challenge gespeichert"], sponsor_save: ["🤝", "hat einen Sponsor gespeichert"],
+    sponsor_delete: ["🤝", "hat einen Sponsor gelöscht"], group_delete: ["👥", "hat eine Gruppe gelöscht"],
+  };
+  function logTarget(t) {
+    if (!t) return "";
+    if (t[0] === "#") return `<button class="link" data-admin-find="${esc(t.slice(1))}">Witz ${esc(t)}</button>`;
+    if (t[0] === "@") return `<button class="link" data-admin-user="${esc(t.slice(1))}">${esc(t)}</button>`;
+    return "";
+  }
+  function logItemHtml(l) {
+    const [ic, txt] = LOG_TEXT[l.action] || ["•", l.action];
+    const w = l.n > 1 ? `${l.n} Witze` : "einen Witz";
+    return `<li><span class="fi">${ic}</span><div><span class="fm"><b>${esc(l.actor)}</b> ${txt.replace("{w}", w)} ${logTarget(l.target)} · ${ago(l.at)}</span>${l.detail ? `<span class="ft">${esc(l.detail)}</span>` : ""}</div></li>`;
+  }
+  function adminProtocolHtml(sec, log) {
+    const w = secWarnings(sec), s = sec || {};
+    return `<section class="panel"><h2>🛡️ Sicherheit</h2>
+        ${w.length ? `<ul class="warn-list">${w.map((x) => `<li>⚠️ ${esc(x)}</li>`).join("")}</ul>` : '<p class="ok-line">✅ Keine Auffälligkeiten in den letzten 24 Stunden.</p>'}
+        <ul class="facts">
+          <li><b>Wer hier Admin ist</b><span>Inhaber mit Admin-Schlüssel${(s.admins || []).map((a) => ` · <button class="link" data-admin-user="${esc(a)}">@${esc(a)}</button>`).join("")}</span></li>
+          <li><b>Neue Konten in 24 Std.</b><span>${fmt(s.signups_24h || 0)}</span></li>
+          <li><b>Gesperrte Konten</b>${(s.banned || []).length ? s.banned.map((b) => `<span><button class="link" data-admin-user="${esc(b.username)}">@${esc(b.username)}</button> · seit ${fmtShort(b.banned_at)}${b.ban_reason ? " · " + esc(b.ban_reason) : ""}</span>`).join("") : "<span>Keine.</span>"}</li>
+        </ul>
+        <p class="muted small">Automatisch geprüft: mehr als 4 Witze eines Kontos in 24 Std., 150+ Stimmen von einem Gerät oder 400+ von einem Internet-Anschluss in 24 Std., Konten mit 3+ Meldungen in 7 Tagen und mehrere Konten, die vom selben Gerät posten (kann auch eine Familie sein).</p></section>
+      <section class="panel"><h2>🚩 Meldungen der letzten 30 Tage</h2>
+        ${(s.recent_reports || []).length ? `<ul class="feed">${s.recent_reports.map((r) => `<li><span class="fi">🚩</span><div><span class="fm">${r.n}× gemeldet · @${esc(r.author_name)} · ${ago(r.at)} · <span class="pill st-${r.status}">${STATUS_LABEL[r.status] || r.status}</span></span><button class="link ft" data-admin-find="${r.id}">${esc(r.body)}</button></div></li>`).join("")}</ul>` : '<p class="muted small">Keine Meldungen.</p>'}</section>
+      <section class="panel"><h2>📋 Moderations-Protokoll</h2>
+        <p class="muted small">Jede Aktion im Admin-Bereich mit Person und Zeitpunkt. Einträge werden nach einem Jahr gelöscht.</p>
+        ${log.length ? `<ul class="feed">${log.map(logItemHtml).join("")}</ul>${log.length >= (S.logLimit || 50) ? '<button class="btn ghost more" data-log-more>Ältere laden</button>' : ""}` : '<p class="muted small">Noch keine Einträge. Ab jetzt wird jede Admin-Aktion hier festgehalten.</p>'}</section>`;
+  }
+  const USORT = [["neu", "Neueste"], ["likes", "Meiste Likes"], ["witze", "Meiste Witze"], ["aktiv", "Zuletzt aktiv"], ["meldungen", "Meldungen"]];
+  function sortUsers(users) {
+    const k = S.userSort || "neu", t = (x) => (x ? new Date(x).getTime() : 0);
+    const by = { likes: (a, b) => b.up_count - a.up_count, witze: (a, b) => b.jokes - a.jokes, aktiv: (a, b) => t(b.last_activity) - t(a.last_activity), meldungen: (a, b) => b.reports - a.reports };
+    return by[k] ? users.slice().sort((a, b) => by[k](a, b) || t(b.created_at) - t(a.created_at)) : users;
+  }
+  function userPills(u) {
+    return `${u.role === "admin" ? '<span class="pill st-visible">Admin</span>' : ""}${u.banned_at ? '<span class="pill st-hidden">Gesperrt</span>' : ""}${u.has_note || u.note ? '<span class="pill">📝 Notiz</span>' : ""}${u.push ? '<span class="pill">🔔</span>' : ""}`;
+  }
+  function adminUserDetailHtml(u) {
+    const tot = u.up + u.down, rate = tot ? Math.round((u.up / tot) * 100) + " %" : "–", all = u.visible + u.queued + u.hidden + u.removed;
+    const dt = (x) => new Date(x).toLocaleDateString("de-DE", { day: "numeric", month: "long", year: "numeric" });
+    return `<button class="link back-link" data-admin-user-back>‹ Alle Nutzer</button>
+      <section class="panel"><div class="mod-head"><h2 class="uname">@${esc(u.username)}</h2>${userPills(u)}</div>
+        ${u.banned_at ? `<p class="err">Gesperrt seit ${fmtShort(u.banned_at)}${u.ban_reason ? ": " + esc(u.ban_reason) : ""}</p>` : ""}
+        ${(u.same_device || []).length ? `<p class="warn-line">⚠️ Postet vom selben Gerät wie ${u.same_device.map((n) => `<button class="link" data-admin-user="${esc(n)}">@${esc(n)}</button>`).join(", ")}</p>` : ""}
+        <div class="kpis">${[[u.visible, "Witze sichtbar"], [u.queued, "geplant"], [u.hidden + u.removed, "ausgebl./entfernt"], [u.up, "👍 erhalten"], [u.down, "👎 erhalten"], [rate, "Zustimmung"], [u.reports, "Meldungen"], [u.votes_given, "Stimmen abgegeben"]].map(([n, l]) => `<div><b>${typeof n === "number" ? fmt(n) : n}</b><span>${l}</span></div>`).join("")}</div>
+        <ul class="facts">
+          <li><b>Dabei seit</b><span>${dt(u.created_at)}</span></li>
+          <li><b>Erster / letzter Witz</b><span>${u.first_joke ? dt(u.first_joke) : "–"} / ${u.last_joke ? ago(u.last_joke) : "–"}</span></li>
+          <li><b>Geräte · Push · Gruppen</b><span>${u.devices} ${u.devices === 1 ? "Gerät" : "Geräte"} · Push ${u.push ? "an" : "aus"} · in ${u.groups} ${u.groups === 1 ? "Gruppe" : "Gruppen"}${u.groups_owned ? `, ${u.groups_owned} selbst gegründet` : ""}</span></li>
+          ${u.best ? `<li><b>Bester Witz</b><a href="#/witz/${u.best.id}">${esc(u.best.body.split("\n")[0])}</a><span>${fmt(u.best.up)} 👍</span></li>` : ""}
+        </ul>
+        <div class="row btns">
+          <a class="btn ghost" href="#/u/${encodeURIComponent(u.username)}">Öffentliches Profil</a>
+          ${all ? `<button class="btn ghost" data-adminview="witze" data-author="${esc(u.username)}">In „Witze“ öffnen</button>` : ""}
+          ${u.visible + u.queued + u.hidden ? `<button class="btn ghost" data-wipe="${esc(u.username)}">Alle Inhalte entfernen</button>` : ""}
+          ${S.adminKey ? (u.role === "admin" ? `<button class="btn ghost" data-set-role="${esc(u.username)}" data-role-on="0">Admin-Rechte entziehen</button>` : (u.banned_at ? "" : `<button class="btn ghost" data-set-role="${esc(u.username)}" data-role-on="1">Zum Admin machen</button>`)) : ""}
+        </div>
+        ${u.banned_at ? `<div><button class="btn ghost" data-unban="${esc(u.username)}">Entsperren</button></div>`
+          : `<form class="ban-form row" data-name="${esc(u.username)}"><input type="text" placeholder="Grund der Sperre (optional)" maxlength="80"><button class="btn danger">Sperren</button></form>`}
+      </section>
+      <form class="panel form" id="noteForm" data-name="${esc(u.username)}"><h2>📝 Interne Notiz</h2>
+        <p class="muted small">Nur für Admins sichtbar, z. B. „Am 26.10. verwarnt“.</p>
+        <textarea id="noteText" rows="3" maxlength="500">${esc(u.note || "")}</textarea><p class="err" id="noteErr"></p>
+        <div><button class="btn">Notiz speichern</button></div></form>
+      <section class="panel"><h2>Witze (${all})</h2>
+        ${(u.jokes || []).length ? `<ul class="mod-list">${u.jokes.map((j) => `<li class="mod-item st-${j.status}"><div class="mod-head"><span class="pill st-${j.status}">${STATUS_LABEL[j.status] || j.status}</span><span class="muted small">#${j.id} · ${CATS[j.category_slug] || ""} · ${ago(j.created_at)} · ${fmt(j.up_count)} 👍 ${fmt(j.down_count)} 👎${j.report_count ? ` · 🚩 ${j.report_count}` : ""}</span></div>
+          <p class="txt">${esc(j.body)}</p>
+          <div class="row">${j.status === "removed" || j.status === "hidden" ? `<button class="btn ghost" data-admin-restore="${j.id}">Wiederherstellen</button>` : `<button class="btn ghost" data-admin-hide="${j.id}">Ausblenden</button><button class="btn danger" data-admin-remove-j="${j.id}">Entfernen</button>`}</div></li>`).join("")}</ul>${all > 40 ? '<p class="muted small">Die neuesten 40 werden angezeigt.</p>' : ""}` : '<p class="muted small">Noch keine Witze.</p>'}</section>
+      <section class="panel"><h2>Protokoll zu diesem Konto</h2>
+        ${(u.log || []).length ? `<ul class="feed">${u.log.map(logItemHtml).join("")}</ul>` : '<p class="muted small">Noch keine Admin-Aktionen.</p>'}</section>`;
+  }
+  function bulkBarHtml() {
+    const n = S.adminSel ? S.adminSel.size : 0;
+    return `<b>${n} ausgewählt</b>
+      <div class="bulk-actions"><button class="btn ghost" data-bulk="visible">Freigeben</button><button class="btn ghost" data-bulk="hidden">Ausblenden</button><button class="btn danger" data-bulk="removed">Entfernen</button>
+        <select id="bulkCatSel" aria-label="Kategorie ändern"><option value="">Kategorie ändern …</option>${Object.entries(CATS).map(([k, l]) => `<option value="${k}">${l}</option>`).join("")}</select></div>
+      <div class="bulk-links"><button class="link" data-sel-all>Alle auf der Seite</button><button class="link" data-sel-none>Auswahl aufheben</button></div>`;
+  }
+  async function bulkApply(status, cat, el) {
+    const ids = [...(S.adminSel || [])]; if (!ids.length) return;
+    const label = { visible: "freigegeben", hidden: "ausgeblendet", removed: "entfernt" };
+    if (status === "removed" && el.dataset.armed !== "1") { el.dataset.armed = "1"; el.textContent = `${ids.length} wirklich entfernen?`; return; }
+    el.disabled = true;
+    try {
+      const n = cat ? await API.adminBulkCategory(S.adminKey, ids, cat) : await API.adminBulkStatus(S.adminKey, ids, status);
+      toast(cat ? `${n} ${n === 1 ? "Witz" : "Witze"} in „${CATS[cat]}“ verschoben.` : `${n} ${n === 1 ? "Witz" : "Witze"} ${label[status]}.`);
+      S.adminSel.clear(); S.adminQ.offset = 0; S.adminRowsPrev = []; render();
+    } catch (ex) { el.disabled = false; toast(errorText(ex)); }
+  }
+  function drawBulkBar() { const b = $("#bulkBar"); if (!b) return; b.hidden = !(S.adminSel && S.adminSel.size); b.innerHTML = bulkBarHtml(); }
+
   function drawAdminJokes() {
     const q = S.adminQ, rows = S.adminRows || [];
     const opt = (v, l, cur) => `<option value="${v}"${v === cur ? " selected" : ""}>${l}</option>`;
+    if (!S.adminSel) S.adminSel = new Set();
     $("#main").innerHTML = `<div class="view">${S.adminHead}
+      <details class="panel post-box"${S.postOpen ? " open" : ""}><summary><b>＋ Witz als „Lachwerk“ posten</b></summary>
+        <form class="form" id="adminPostForm">
+          <label>Kategorie<select id="apCat">${Object.entries(CATS).map(([k, l]) => `<option value="${k}">${l}</option>`).join("")}</select></label>
+          <label>Witz<textarea id="apText" rows="4" maxlength="500" placeholder="Witz … (Pointe gern in eine neue Zeile)"></textarea></label>
+          <label>Wann?<select id="apMode"><option value="now">Sofort veröffentlichen</option><option value="queue">Hinten in den Vorrat einreihen</option><option value="at">Zu einem bestimmten Zeitpunkt</option></select></label>
+          <label id="apAtWrap" hidden>Zeitpunkt<input type="datetime-local" id="apAt"></label>
+          <p class="err" id="apErr"></p><div><button class="btn">Posten</button></div></form></details>
       <form class="panel form search-form" id="adminSearchForm">
         <div class="sf-row"><input type="text" id="aqText" placeholder="Text oder Nummer suchen" value="${esc(q.q)}"><button class="btn">Suchen</button></div>
         <div class="sf-row">
@@ -2388,18 +2563,26 @@
           <p class="err" id="ejErr"></p>
           <div class="row"><button type="button" class="btn ghost" data-admin-edit-cancel>Abbrechen</button><button class="btn">Speichern</button></div></form></li>`
         : `<li class="mod-item st-${j.status}">
-          <div class="mod-head"><span class="pill st-${j.status}">${STATUS_LABEL[j.status] || j.status}</span>
+          <div class="mod-head"><label class="sel" title="Auswählen"><input type="checkbox" class="sel-joke" value="${j.id}"${S.adminSel.has(Number(j.id)) ? " checked" : ""}></label><span class="pill st-${j.status}">${STATUS_LABEL[j.status] || j.status}</span>
             ${j.report_count ? `<span class="pill reports">${j.report_count} Meldungen</span>` : ""}
             <span class="muted small">#${j.id} · ${CATS[j.category_slug] || ""} · @${esc(j.author_name)}${j.is_user ? "" : " (Redaktion)"} · ${j.status === "queued" ? "erscheint " + new Date(j.created_at).toLocaleString("de-DE", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" }) : ago(j.created_at)} · ${fmt(j.up_count)} 👍 ${fmt(j.down_count)} 👎</span></div>
           <p class="txt">${esc(j.body)}</p>
           <div class="row">
             <button class="btn ghost" data-admin-edit="${j.id}">Bearbeiten</button>
-            ${j.status === "removed" || j.status === "hidden" ? `<button class="btn ghost" data-admin-restore="${j.id}">Wiederherstellen</button>` : `<button class="btn danger" data-admin-remove-j="${j.id}">Entfernen</button>`}
+            ${j.status === "removed" || j.status === "hidden" ? `<button class="btn ghost" data-admin-restore="${j.id}">Wiederherstellen</button>` : `<button class="btn ghost" data-admin-hide="${j.id}">Ausblenden</button><button class="btn danger" data-admin-remove-j="${j.id}">Entfernen</button>`}
             ${j.status === "visible" ? `<a class="btn ghost" href="#/witz/${j.id}">Ansehen</a>` : ""}
           </div></li>`).join("")}</ul>
         ${rows.length % 30 === 0 ? '<button class="btn ghost more" data-admin-more>Weitere laden</button>' : ""}`
       : '<p class="empty">Keine Witze gefunden.</p>'}
+      <div id="bulkBar" class="bulk-bar"${S.adminSel.size ? "" : " hidden"}>${bulkBarHtml()}</div>
     </div>`;
+  }
+  function adminUserSummaryHtml(users) {
+    const wk = Date.now() - 7 * 864e5, t = (x) => (x ? new Date(x).getTime() : 0);
+    const tiles = [[users.length, "Konten"], [users.filter((u) => t(u.created_at) > wk).length, "neu (7 Tage)"], [users.filter((u) => t(u.last_activity) > wk).length, "aktiv (7 Tage)"],
+      [users.filter((u) => u.jokes > 0).length, "mit Witzen"], [users.filter((u) => u.push).length, "mit Push"], [users.filter((u) => u.banned_at).length, "gesperrt"]];
+    return `<div class="kpis user-kpis">${tiles.map(([n, l]) => `<div><b>${fmt(n)}</b><span>${l}</span></div>`).join("")}</div>
+      <div class="chips static">${USORT.map(([k, l]) => `<button class="chip" data-usort="${k}" aria-pressed="${(S.userSort || "neu") === k}">${l}</button>`).join("")}</div>`;
   }
   function adminUsersHtml(users) {
     return `<form class="panel form search-form" id="userSearchForm"><div class="sf-row"><input type="text" id="uqText" placeholder="Benutzername suchen" value="${esc(S.adminUserQ)}"><button class="btn">Suchen</button></div>
@@ -2407,16 +2590,11 @@
         ${S.adminKey ? "" : `</form><form class="panel form" id="ownerKeyForm"><p class="small"><b>Weitere Admins ernennen:</b> Das darf nur, wer den Admin-Schlüssel hat. Gib ihn hier ein, dann erscheint bei jedem Konto „Zum Admin machen“.</p>
           <div class="sf-row"><input type="password" id="ownerKey" placeholder="Admin-Schlüssel" autocomplete="current-password"><button class="btn">Freischalten</button></div><p class="err" id="ownerErr"></p>`}
         ${S.adminKey ? '<p class="muted small"><b>Weitere Admins:</b> Mit „Zum Admin machen“ bekommt ein Konto vollen Zugriff auf diesen Bereich. Die Person meldet sich einfach mit ihrem Lachwerk-Konto an und findet oben „Moderation“. Rechte vergeben und entziehen kannst nur du mit dem Admin-Schlüssel.</p>' : ""}</form>
-      ${users.length ? `<ul class="mod-list">${users.map((u) => `<li class="mod-item${u.banned_at ? " st-hidden" : ""}">
-          <div class="mod-head"><a href="#/u/${encodeURIComponent(u.username)}"><b>@${esc(u.username)}</b></a>${u.role === "admin" ? '<span class="pill st-visible">Admin</span>' : ""}${u.banned_at ? `<span class="pill st-hidden">Gesperrt${u.ban_reason ? ": " + esc(u.ban_reason) : ""}</span>` : ""}</div>
-          <span class="muted small">Dabei seit ${new Date(u.created_at).toLocaleDateString("de-DE")} · ${u.jokes} Witze · ${fmt(u.up_count)} 👍 ${fmt(u.down_count)} 👎 · ${u.punchlines} Pointen${u.reports ? ` · ${u.reports} Meldungen` : ""}${u.last_activity ? " · zuletzt aktiv " + ago(u.last_activity) : ""}</span>
-          <div class="row">
-            ${u.banned_at ? `<button class="btn ghost" data-unban="${esc(u.username)}">Entsperren</button>`
-              : `<form class="ban-form row" data-name="${esc(u.username)}"><input type="text" placeholder="Grund (optional)" maxlength="80"><button class="btn danger">Sperren</button></form>`}
-            ${u.jokes || u.punchlines ? `<button class="btn ghost" data-wipe="${esc(u.username)}">Alle Inhalte entfernen</button>` : ""}
-            <button class="btn ghost" data-adminview="witze" data-author="${esc(u.username)}">Witze ansehen</button>
-            ${S.adminKey ? (u.role === "admin" ? `<button class="btn ghost" data-set-role="${esc(u.username)}" data-role-on="0">Admin-Rechte entziehen</button>` : (u.banned_at ? "" : `<button class="btn ghost" data-set-role="${esc(u.username)}" data-role-on="1">Zum Admin machen</button>`)) : ""}
-          </div></li>`).join("")}</ul>` : '<p class="empty">Keine Konten gefunden.</p>'}`;
+      ${adminUserSummaryHtml(users)}
+      ${users.length ? `<ul class="user-list">${sortUsers(users).map((u) => `<li><button class="user-row${u.banned_at ? " banned" : ""}" data-admin-user="${esc(u.username)}">
+          <span class="ur-name"><b>@${esc(u.username)}</b>${userPills(u)}</span>
+          <span class="muted small">seit ${new Date(u.created_at).toLocaleDateString("de-DE")} · ${u.jokes} Witze · ${fmt(u.up_count)} 👍 ${fmt(u.down_count)} 👎${u.reports ? ` · 🚩 ${u.reports}` : ""}${u.last_activity ? " · aktiv " + ago(u.last_activity) : ""}</span>
+          <span class="ur-go" aria-hidden="true">›</span></button></li>`).join("")}</ul>` : '<p class="empty">Keine Konten gefunden.</p>'}`;
   }
   function adminSettingsHtml(o, contact) {
     return `<form class="panel form" id="contactForm">
@@ -2585,9 +2763,19 @@
     if ("adminEditCancel" in d) { S.editJoke = null; drawAdminJokes(); return; }
     if (d.adminHide || d.adminRestore || d.adminRemoveJ) {
       const id = Number(d.adminHide || d.adminRestore || d.adminRemoveJ); t.disabled = true;
-      API.adminSet(S.adminKey, id, d.adminRestore ? "visible" : "removed").then(() => { toast(d.adminRestore ? "Wiederhergestellt." : "Entfernt."); render(); }).catch((err) => { t.disabled = false; toast(errorText(err)); });
+      const job = d.adminHide ? API.adminBulkStatus(S.adminKey, [id], "hidden") : API.adminSet(S.adminKey, id, d.adminRestore ? "visible" : "removed");
+      job.then(() => { toast(d.adminRestore ? "Wiederhergestellt." : d.adminHide ? "Ausgeblendet." : "Entfernt."); render(); }).catch((err) => { t.disabled = false; toast(errorText(err)); });
       return;
     }
+    if (d.adminUser) { S.adminView = "nutzer"; S.adminUser = d.adminUser; window.scrollTo({ top: 0 }); render(); return; }
+    if ("adminUserBack" in d) { S.adminUser = null; render(); return; }
+    if (d.adminFind) { S.adminView = "witze"; S.adminUser = null; S.adminQ = { q: d.adminFind, cat: "", status: "", author: "", offset: 0 }; S.adminRowsPrev = []; window.scrollTo({ top: 0 }); render(); return; }
+    if (d.usort) { S.userSort = d.usort; render(); return; }
+    if (d.dashMetric) { S.dashMetric = d.dashMetric; document.querySelectorAll("[data-dash-metric]").forEach((b) => b.setAttribute("aria-pressed", b === t)); if (S.dash && $("#dashChart")) $("#dashChart").innerHTML = dashChartHtml(S.dash); return; }
+    if ("logMore" in d) { S.logLimit = (S.logLimit || 50) + 50; render(); return; }
+    if ("selAll" in d) { document.querySelectorAll(".sel-joke").forEach((c) => { c.checked = true; S.adminSel.add(Number(c.value)); }); drawBulkBar(); return; }
+    if ("selNone" in d) { S.adminSel.clear(); document.querySelectorAll(".sel-joke").forEach((c) => { c.checked = false; }); drawBulkBar(); return; }
+    if (d.bulk) { bulkApply(d.bulk, null, t); return; }
     if ("adminMore" in d) { S.adminQ.offset += 30; render(); return; }
     if (d.unban) { API.adminBan(S.adminKey, d.unban, false).then(() => { toast("Entsperrt."); render(); }).catch((err) => toast(errorText(err))); return; }
     if (d.wipe) {
@@ -2661,7 +2849,7 @@
     if (d.fav !== undefined) { toggleFav(d.fav); return; }
     if (d.pvote) { votePunch(Number(d.id), Number(d.pvote)); return; }
     if (d.rmPunch) { t.disabled = true; API.adminRemovePunchline(S.adminKey, Number(d.rmPunch)).then(() => { toast("Pointe entfernt."); render(); }).catch((err) => { t.disabled = false; toast(errorText(err)); }); return; }
-    if (d.adminview) { S.adminView = d.adminview; S.adminQ.offset = 0; S.adminRowsPrev = []; S.editJoke = null; if (d.author !== undefined) S.adminQ = { q: "", cat: "", status: "", author: d.author, offset: 0 }; window.scrollTo({ top: 0 }); render(); return; }
+    if (d.adminview) { S.adminView = d.adminview; S.adminUser = null; if (S.adminSel) S.adminSel.clear(); S.adminQ.offset = 0; S.adminRowsPrev = []; S.editJoke = null; if (d.author !== undefined) S.adminQ = { q: "", cat: "", status: "", author: d.author, offset: 0 }; window.scrollTo({ top: 0 }); render(); return; }
     if ("adminLogout" in d) { S.adminKey = null; session.set("admin", null); location.hash = "#/"; return; }
     if (d.approve || d.remove) {
       const id = Number(d.approve || d.remove);
@@ -2674,6 +2862,9 @@
   });
   document.addEventListener("change", (e) => {
     if (e.target.id === "aqCat" || e.target.id === "aqStatus") $("#adminSearchForm").requestSubmit();
+    if (e.target.classList.contains("sel-joke")) { const id = Number(e.target.value); if (e.target.checked) S.adminSel.add(id); else S.adminSel.delete(id); drawBulkBar(); }
+    if (e.target.id === "bulkCatSel" && e.target.value) bulkApply(null, e.target.value, e.target);
+    if (e.target.id === "apMode") { $("#apAtWrap").hidden = e.target.value !== "at"; if (e.target.value === "at" && !$("#apAt").value) { const x = new Date(Date.now() + 864e5); x.setMinutes(0, 0, 0); $("#apAt").value = new Date(x - x.getTimezoneOffset() * 6e4).toISOString().slice(0, 16); } }
     if (e.target.id === "spLogoFile" && e.target.files[0]) {
       shrinkLogo(e.target.files[0]).then((data) => {
         if (data.length > 140000) { $("#spErr").textContent = "Das Logo ist auch verkleinert noch zu groß. Bitte ein einfacheres Bild wählen."; return; }
@@ -2870,6 +3061,25 @@
         if (ex.code === "user_not_found") { S.adminKey = key; session.set("admin", key); toast("Freigeschaltet. Du kannst jetzt Admins ernennen."); render(); }
         else $("#ownerErr").textContent = ex.code === "owner_only" ? "Der Admin-Schlüssel stimmt nicht." : errorText(ex);
       }
+      return;
+    }
+    if (e.target.id === "adminPostForm") {
+      e.preventDefault();
+      const mode = $("#apMode").value, at = mode === "at" && $("#apAt").value ? new Date($("#apAt").value).toISOString() : null, btn = e.target.querySelector("button");
+      if (mode === "at" && !at) { $("#apErr").textContent = "Bitte einen Zeitpunkt wählen."; return; }
+      btn.disabled = true;
+      try {
+        const when = await API.adminPostJoke(S.adminKey, $("#apCat").value, $("#apText").value, mode, at);
+        S.postOpen = false; S.adminQ.offset = 0; S.adminRowsPrev = [];
+        toast(mode === "now" ? "Veröffentlicht." : `Eingeplant für ${new Date(when).toLocaleString("de-DE", { weekday: "short", day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" })} Uhr.`);
+        render();
+      } catch (ex) { btn.disabled = false; $("#apErr").textContent = errorText(ex); }
+      return;
+    }
+    if (e.target.id === "noteForm") {
+      e.preventDefault();
+      try { await API.adminSetNote(S.adminKey, e.target.dataset.name, $("#noteText").value); toast("Notiz gespeichert."); render(); }
+      catch (ex) { $("#noteErr").textContent = errorText(ex); }
       return;
     }
     if (e.target.id === "userSearchForm") { e.preventDefault(); S.adminUserQ = $("#uqText").value.trim(); render(); return; }
