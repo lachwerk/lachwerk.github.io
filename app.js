@@ -2032,7 +2032,7 @@
     return { src, device, off, last: null };
   })();
   function trackView(r) {
-    if (!LIVE || VISIT.off || r.view === "admin" || r.preview || (r.view === "tv" && /vorschau=1/.test(location.hash))) return;
+    if (!LIVE || VISIT.off || r.view === "admin" || S.adminKey || isRoleAdmin() || r.preview || (r.view === "tv" && /vorschau=1/.test(location.hash))) return;
     const key = r.view === "list" ? "list:" + (S.range === "new" ? "new" : "") : location.hash.split("?")[0];
     if (key === VISIT.last) return;
     VISIT.last = key;
@@ -2309,11 +2309,11 @@
     const tile = (n, l) => `<div><b>${n}</b><span>${l}</span></div>`;
     return `<div class="stats">${tile(fmt(t.jokes), "Witze sichtbar")}${tile(fmt(t.user_jokes), "von Nutzern")}${tile(fmt(t.users), "Konten")}${tile(fmt(t.votes), "Stimmen gesamt")}${tile(fmt(t.devices), "Geräte haben abgestimmt")}${tile(fmt(t.queued), "im Vorrat")}</div>
       <section class="panel"><h2>Letzte 14 Tage</h2>
-        <table class="tbl"><thead><tr><th>Tag</th><th>Aktivität</th><th>Besucher</th><th>Stimmen</th><th>Reakt.</th><th>Duelle</th><th>Witze</th><th>Konten</th></tr></thead><tbody>
+        <table class="tbl"><thead><tr><th>Tag</th><th>Aktivität</th><th>Bewerter</th><th>Stimmen</th><th>Reakt.</th><th>Duelle</th><th>Witze</th><th>Konten</th></tr></thead><tbody>
         ${days.slice().reverse().map((d) => `<tr><td>${fmtShort(d.day)}</td><td class="bar"><i style="width:${Math.round(((d.votes + d.reactions + d.duels) / max) * 100)}%"></i></td><td>${d.voters}</td><td>${d.votes}</td><td>${d.reactions}</td><td>${d.duels}</td><td>${d.new_jokes}</td><td>${d.signups}</td></tr>`).join("")}
         </tbody></table>
         <p class="muted small"><a href="#/bildschirm">Bildschirm-Link gestalten</a> · <a href="plakat.html" target="_blank" rel="noopener">QR-Plakat drucken</a></p>
-        <p class="muted small">Besucher = verschiedene Geräte, die an dem Tag abgestimmt, reagiert oder ein Duell entschieden haben. Reine Leser werden nicht gezählt (kein Tracking).</p></section>
+        <p class="muted small">Bewerter = verschiedene Geräte, die an dem Tag abgestimmt, reagiert oder ein Duell entschieden haben. Alle Besucher inklusive reiner Leser stehen oben unter „Alle Besucher“.</p></section>
       <section class="panel"><h2>Kategorien</h2>
         <table class="tbl"><thead><tr><th>Kategorie</th><th>Witze</th><th>im Vorrat</th><th>Stimmen 7 Tage</th></tr></thead><tbody>
         ${cats.map((c) => `<tr><td>${esc(c.name)}</td><td>${c.jokes}</td><td>${c.queued}</td><td>${c.votes_week}</td></tr>`).join("")}</tbody></table></section>
@@ -2360,7 +2360,7 @@
         <div><button class="btn">Speichern</button></div>
       </form>`;
   }
-  const KPI = [["visitors", "Besucher"], ["votes", "Stimmen"], ["reactions", "Reaktionen"], ["duels", "Duelle"], ["jokes", "Neue Witze"], ["signups", "Registrierungen"], ["reports", "Meldungen"]];
+  const KPI = [["visitors", "Bewerter"], ["votes", "Stimmen"], ["reactions", "Reaktionen"], ["duels", "Duelle"], ["jokes", "Neue Witze (Nutzer)"], ["signups", "Neue Konten"], ["reports", "Meldungen"]];
   function adminOverviewHtml(o, act, push, punchReports, dash, sec) {
     const delta = (a, b) => { const d = a - b; return d === 0 ? '<span class="delta">±0</span>' : `<span class="delta ${d > 0 ? "up" : "down"}">${d > 0 ? "▲" : "▼"} ${Math.abs(d)}</span>`; };
     const days = o.queue_until ? Math.floor((new Date(o.queue_until) - Date.now()) / 864e5) : 0;
@@ -2368,8 +2368,8 @@
     const icon = { joke: "😂", punchline: "🥊", signup: "👋", report: "🚩" };
     const what = { joke: "neuer Witz", punchline: "neue Pointe", signup: "hat sich registriert", report: "Meldung" };
     return `<section class="panel"><h2>Heute <span class="muted small">(im Vergleich zu gestern)</span></h2>
-        <div class="kpis">${KPI.map(([k, l]) => `<div><b>${fmt(o.today[k])}</b><span>${l}</span>${delta(o.today[k], o.yesterday[k])}</div>`).join("")}</div>
-        <p class="muted small">Besucher = verschiedene Geräte, die heute abgestimmt, reagiert oder ein Duell entschieden haben.</p></section>
+        <div class="kpis">${dash && dash.days ? `<div><b>${fmt(dash.days[dash.days.length - 1].visitors)}</b><span>Besucher</span>${delta(dash.days[dash.days.length - 1].visitors, dash.days[dash.days.length - 2].visitors)}</div>` : ""}${KPI.map(([k, l]) => `<div><b>${fmt(o.today[k])}</b><span>${l}</span>${delta(o.today[k], o.yesterday[k])}</div>`).join("")}</div>
+        <p class="muted small"><b>Besucher</b> = alle, die die Seite geöffnet haben (anonym gezählt, Admins nicht mitgezählt). <b>Bewerter</b> = Geräte, die abgestimmt, reagiert oder ein Duell entschieden haben.</p></section>
       ${adminDashHtml(dash, sec)}
       <div class="status-grid">
         <button class="status${warn(o.open_reports > 0)}" data-adminview="gemeldet"><b>${o.open_reports}</b><span>${o.open_reports === 1 ? "Witz" : "Witze"} zu prüfen</span></button>
@@ -2392,7 +2392,7 @@
   }
   const STATUS_LABEL = { visible: "Sichtbar", hidden: "Ausgeblendet", removed: "Entfernt", queued: "Geplant" };
   /* ───────── Admin: Dashboard, Protokoll, Nutzer-Details ───────── */
-  const DASH_METRICS = [["visitors", "Besucher"], ["voters", "Bewerter"], ["votes", "Stimmen"], ["jokes", "Neue Witze"], ["signups", "Neue Konten"], ["reports", "Meldungen"]];
+  const DASH_METRICS = [["visitors", "Besucher"], ["voters", "Bewerter"], ["votes", "Stimmen"], ["jokes", "Neue Witze (Nutzer)"], ["signups", "Neue Konten"], ["reports", "Meldungen"]];
   function pctDelta(a, b, invert) {
     if (!b) return a ? `<span class="delta ${invert ? "down" : "up"}">neu</span>` : '<span class="delta">±0</span>';
     const p = Math.round(((a - b) / b) * 100);
@@ -2431,6 +2431,7 @@
         <div id="dashChart">${dashChartHtml(d)}</div></section>
       <section class="panel"><h2>Vom Besuch zum Beitrag <span class="muted small">(7 Tage)</span></h2>
         <ul class="funnel">${[[f.visitors, "Besucher"], [f.voters, "haben bewertet"], [f.signups, "neue Konten"], [f.posters, "haben gepostet"]].map(([n, l], i) => `<li><span>${l}</span><i style="width:${Math.max(2, Math.round((n / fmax) * 100))}%"></i><b>${fmt(n)}${i && f.visitors >= f.voters ? ` <small>${Math.round((n / f.visitors) * 100)} %</small>` : ""}</b></li>`).join("")}</ul>
+        ${days.slice(-14).some((x) => !x.visitors) ? '<p class="muted small">ℹ️ Besucher werden erst seit dem 25.10. gezählt. Vergleiche mit der Vorwoche sind darum erst ab Anfang November aussagekräftig.</p>' : ""}
         <p class="muted small">👍-Anteil aller Stimmen: ${d.like_rate ?? "–"} % · Ø ${d.votes_per_joke ?? "–"} Stimmen pro neuem Witz · aktive Autoren: ${d.authors_7} in 7 Tagen, ${d.authors_30} in 30 Tagen</p></section>
       <section class="panel"><h2>Stimmen der letzten 24 Stunden</h2>
         <div class="spark hours">${hours.map((n, i) => `<i style="height:${Math.max(2, Math.round((n / hmax) * 100))}%" title="vor ${23 - i} Std.: ${n}"></i>`).join("")}</div>
