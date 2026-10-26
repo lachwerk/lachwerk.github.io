@@ -399,7 +399,7 @@ language plpgsql security definer set search_path = public as $$
 declare n int;
 begin
   if not public.admin_check(p_key) then raise exception 'not_admin'; end if;
-  delete from public.banned_words;
+  delete from public.banned_words where true;
   insert into public.banned_words (word)
   select distinct lower(trim(w)) from unnest(coalesce(p_words, '{}')) w
   where lower(trim(w)) ~ '^[[:alnum:]äöüß]{2,40}\*?$'
