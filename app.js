@@ -2404,6 +2404,8 @@
   function adminUsersHtml(users) {
     return `<form class="panel form search-form" id="userSearchForm"><div class="sf-row"><input type="text" id="uqText" placeholder="Benutzername suchen" value="${esc(S.adminUserQ)}"><button class="btn">Suchen</button></div>
         <p class="muted small">${users.length} ${users.length === 1 ? "Konto" : "Konten"}${S.adminUserQ ? " gefunden" : ", Admins und neueste zuerst"}. E-Mail-Adressen siehst du aus Datenschutzgründen nur in Supabase (Authentication → Users).</p>
+        ${S.adminKey ? "" : `</form><form class="panel form" id="ownerKeyForm"><p class="small"><b>Weitere Admins ernennen:</b> Das darf nur, wer den Admin-Schlüssel hat. Gib ihn hier ein, dann erscheint bei jedem Konto „Zum Admin machen“.</p>
+          <div class="sf-row"><input type="password" id="ownerKey" placeholder="Admin-Schlüssel" autocomplete="current-password"><button class="btn">Freischalten</button></div><p class="err" id="ownerErr"></p>`}
         ${S.adminKey ? '<p class="muted small"><b>Weitere Admins:</b> Mit „Zum Admin machen“ bekommt ein Konto vollen Zugriff auf diesen Bereich. Die Person meldet sich einfach mit ihrem Lachwerk-Konto an und findet oben „Moderation“. Rechte vergeben und entziehen kannst nur du mit dem Admin-Schlüssel.</p>' : ""}</form>
       ${users.length ? `<ul class="mod-list">${users.map((u) => `<li class="mod-item${u.banned_at ? " st-hidden" : ""}">
           <div class="mod-head"><a href="#/u/${encodeURIComponent(u.username)}"><b>@${esc(u.username)}</b></a>${u.role === "admin" ? '<span class="pill st-visible">Admin</span>' : ""}${u.banned_at ? `<span class="pill st-hidden">Gesperrt${u.ban_reason ? ": " + esc(u.ban_reason) : ""}</span>` : ""}</div>
@@ -2857,6 +2859,17 @@
       const id = Number(e.target.dataset.id);
       try { await API.adminUpdateJoke(S.adminKey, id, $("#ejText").value.trim(), $("#ejCat").value); S.editJoke = null; toast("Gespeichert."); S.adminQ.offset = 0; S.adminRowsPrev = []; render(); }
       catch (ex) { $("#ejErr").textContent = errorText(ex); }
+      return;
+    }
+    if (e.target.id === "ownerKeyForm") {
+      e.preventDefault();
+      const key = $("#ownerKey").value.trim();
+      // Prüft den Schlüssel, ohne etwas zu ändern: bei richtigem Schlüssel kommt „Nutzer gibt es nicht“
+      try { await API.adminSetRole(key, "__schluessel_pruefen__", false); }
+      catch (ex) {
+        if (ex.code === "user_not_found") { S.adminKey = key; session.set("admin", key); toast("Freigeschaltet. Du kannst jetzt Admins ernennen."); render(); }
+        else $("#ownerErr").textContent = ex.code === "owner_only" ? "Der Admin-Schlüssel stimmt nicht." : errorText(ex);
+      }
       return;
     }
     if (e.target.id === "userSearchForm") { e.preventDefault(); S.adminUserQ = $("#uqText").value.trim(); render(); return; }
